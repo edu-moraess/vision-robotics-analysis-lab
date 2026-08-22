@@ -1,83 +1,65 @@
 # Vision Robotics Analysis Lab
 
-**Computer Vision · Scene Understanding · Risk · Image-space Navigation**
+**Computer Engineering · Computer Vision · Robotics · Numerical Systems**
 
-Engineering platform for monocular image analysis with a professional Streamlit interface.
+Engineering laboratory for monocular perception, image-space navigation and decision support.
 
 **Repository:** https://github.com/edu-moraess/vision-robotics-analysis-lab
 
 ---
 
-## Status
+## Status matrix
 
 | Capability | Status |
 |------------|--------|
-| Classical object detection | **Implemented** |
-| Free-space / scene metrics | **Implemented** |
-| Transparent risk scoring | **Implemented** |
-| Image-space A* / Dijkstra | **Implemented** |
-| Decision engine (Brain) | **Implemented** |
-| Streamlit UI | **Implemented** |
-| Metric depth / YOLO / ROS 2 | Future |
+| Classical detection | **IMPLEMENTED** |
+| Preprocessing stages (CLAHE, edges) | **IMPLEMENTED** |
+| Scene / free-space heuristics | **IMPLEMENTED** |
+| Image-space occupancy + cost map | **IMPLEMENTED** |
+| A* / Dijkstra (pixel grid) | **IMPLEMENTED** |
+| Risk engine (transparent weights) | **IMPLEMENTED** |
+| Decision engine (rule-based) | **IMPLEMENTED** |
+| Webcam / IP camera abstraction | **IMPLEMENTED** |
+| IoU tracker (temporal only) | **IMPLEMENTED** |
+| Latency breakdown (perf_counter) | **IMPLEMENTED** |
+| Streamlit engineering UI | **IMPLEMENTED** |
+| Metric depth | **NOT AVAILABLE** |
+| YOLO | **OPTIONAL / UNAVAILABLE** |
+| EKF / SLAM / ROS 2 / physical control | **FUTURE** |
 
-Navigation outputs from a single RGB image are **image-space estimates**, not metric-world trajectories.
-
----
-
-## Pipeline
-
-```
-Image → ClassicalDetector → SceneAnalyzer → RiskEngine
-      → ImageSpacePlanner (A*/Dijkstra) → DecisionEngine → Outputs
-```
+Navigation paths from RGB are **image-space estimates**. Risk scores are **heuristics**, not calibrated probabilities.
 
 ---
 
-## Install
+## Architecture
+
+```
+CAMERA / IMAGE
+      ↓
+PREPROCESS → DETECTION → TRACKING (live)
+      ↓
+SCENE + FREE-SPACE → OCCUPANCY + COST MAP
+      ↓
+RISK + DECISION → A*/DIJKSTRA (pixels)
+```
+
+---
+
+## Install & run
 
 ```bash
 git clone https://github.com/edu-moraess/vision-robotics-analysis-lab.git
 cd vision-robotics-analysis-lab
-python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-```
-
----
-
-## Run
-
-```bash
 streamlit run app/streamlit_app.py
 ```
 
-### Streamlit Cloud
-
-1. [share.streamlit.io](https://share.streamlit.io)
-2. Login with GitHub **edu-moraess**
-3. New app → `edu-moraess/vision-robotics-analysis-lab`
-4. Branch: `main`
-5. Main file: **`app/streamlit_app.py`**
-6. Deploy
-
----
+Streamlit Cloud: main file `app/streamlit_app.py`. Live webcam is typically unavailable on Cloud — use Image Analysis mode.
 
 ## Tests
 
 ```bash
 pytest tests/ -v
-```
-
----
-
-## Layout
-
-```
-app/streamlit_app.py
-src/vision/   # detector, scene, geometry, annotator
-src/brain/    # risk_engine, decision_engine
-src/planning/ # image_planner
-src/core/     # AnalysisPipeline
-tests/
 ```
 
 ## License
