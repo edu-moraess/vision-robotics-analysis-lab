@@ -1,0 +1,148 @@
+=== TESTS ===
+........................................................................ [ 75%]
+.......................                                                  [100%]
+95 passed in 10.04s
+=== COMPILE ===
+=== DIFF CHECK ===
+=== STATUS ===
+ [31mM[m README.md
+ [31mM[m app/streamlit_app.py
+ [31mM[m src/brain/risk_engine.py
+ [31mM[m src/core/pipeline.py
+ [31mM[m src/learning/experience.py
+ [31mM[m src/planning/__init__.py
+ [31mM[m src/planning/image_planner.py
+ [31mM[m src/robotics/world_model.py
+ [31mM[m src/vision/detector.py
+ [31mM[m src/vision/geometry.py
+ [31mM[m src/vision/tracker.py
+ [31mM[m src/vision/video_analysis.py
+[31m??[m docs/architecture_classification.md
+[31m??[m docs/audit_gaps.txt
+[31m??[m docs/full_audit_raw.txt
+[31m??[m docs/second_audit.txt
+[31m??[m src/motion/
+[31m??[m src/planning/cost_map.py
+[31m??[m src/planning/semantic_occupancy.py
+[31m??[m src/segmentation/
+[31m??[m src/simulation/
+[31m??[m tests/test_motion.py
+[31m??[m tests/test_segmentation.py
+[31m??[m tests/test_simulation.py
+[31m??[m tests/test_world_model_cost.py
+=== SECRETS ===
+./tests/test_groq_integration.py:48:        secret_provider=SecretStub("gsk-test-secret"),
+./tests/test_groq_integration.py:55:    assert session.calls[0]["headers"]["Authorization"].endswith("gsk-test-secret")
+./tests/test_groq_integration.py:57:    assert "gsk-test-secret" not in str(client.public_status())
+=== LEGACY / PLACEHOLDER WORDING ===
+app/streamlit_app.py:214:arq_status = describe_architecture().get("status", "NOT TRAINED")
+src/arqtech/architecture.py:27:def describe_architecture(model_status: str = "NOT TRAINED", checkpoint_path: Optional[str] = None) -> Dict[str, Any]:
+src/arqtech/architecture.py:28:    status = str(model_status or "NOT TRAINED").upper()
+src/arqtech/architecture.py:37:        "checkpoint": checkpoint_path or "NOT AVAILABLE",
+src/arqtech/detector_interface.py:45:        return self._record.get("model_type", "SCAFFOLD") if self._record else "SCAFFOLD"
+src/arqtech/detector_interface.py:53:        raise NotImplementedError("ARQTECH forward pass not implemented — no trained weights.")
+src/arqtech/inference/detector.py:50:        raise NotImplementedError(
+src/arqtech/status.py:7:    NOT_TRAINED = "NOT TRAINED"
+src/camera/video_file.py:95:            "codec": "NOT AVAILABLE",
+src/camera/video_file.py:174:            "format": p.suffix.lower().lstrip(".") if p.suffix else "NOT AVAILABLE",
+src/camera/video_file.py:175:            "duration_s": duration if duration is not None else "NOT AVAILABLE",
+src/camera/video_file.py:176:            "resolution": (self._width, self._height) if self._width else "NOT AVAILABLE",
+src/camera/video_file.py:177:            "source_fps": self._file_fps if self._file_fps else "NOT AVAILABLE",
+src/camera/video_file.py:178:            "frame_count": self._frame_count if self._frame_count else "NOT AVAILABLE",
+src/camera/video_file.py:179:            "file_size_bytes": size if size is not None else "NOT AVAILABLE",
+src/camera/video_file.py:180:            "codec": "NOT AVAILABLE",
+src/ml/report.py:43:        lifecycle_status = (model or {}).get("lifecycle_status") or (model or {}).get("status") or "NOT TRAINED"
+src/ml/report.py:62:            "class_performance": "NOT MEASURED" if "precision" not in measured else measured.get("precision"),
+src/ml/report.py:63:            "error_analysis": "NOT MEASURED",
+src/ml/training_config.py:45:        "lifecycle_status": "NOT TRAINED",
+src/robotics/world_model.py:16:    distance: str = "NOT AVAILABLE"
+src/robotics/world_model.py:74:            distance=row.get("distance", "NOT AVAILABLE"),
+src/vision/detector.py:34:    segmentation_status: str = "NOT AVAILABLE"
+src/vision/scene_narrative.py:37:    lines.append("Distance: NOT AVAILABLE (no calibrated depth).")
+src/vision/calibration.py:30:        raise NotImplementedError("Ground-plane projection requires a validated calibration implementation")
+docs/arqtech.md:12:| Trained weights | **NOT AVAILABLE** |
+docs/arqtech.md:13:| mAP / precision / recall | **NOT AVAILABLE** |
+docs/arqtech.md:14:| Live ARQTECH inference | **NOT AVAILABLE** |
+docs/arqtech.md:23:| Status | **ACTIVE** | **SCAFFOLD** |
+docs/master_audit.md:22:| ARQTECH detection | NOT AVAILABLE | Classification checkpoints are refused by `ArqtechDetector`; reviewed detection annotations and postprocessing are still required |
+docs/master_audit.md:23:| ARQTECH lifecycle | IMPLEMENTED | Controlled `NOT TRAINED`, `TRAINING`, `TRAINED`, `VALIDATING`, `VALIDATED`, `ACTIVE`, `ARCHIVED`, `FAILED` transitions |
+docs/full_audit_raw.txt:178:./README.md:59:| ARQTECH object detection | NOT AVAILABLE without a reviewed detection checkpoint and postprocessing |
+docs/full_audit_raw.txt:179:./README.md:65:| Metric depth / camera calibration | NOT AVAILABLE; default `NOT CALIBRATED` |
+docs/full_audit_raw.txt:180:./README.md:66:| Real-world velocity / km/h | NOT AVAILABLE |
+docs/full_audit_raw.txt:189:./config/default.yaml:52:  detection_status: NOT AVAILABLE WITHOUT REVIEWED DETECTION CHECKPOINT
+docs/full_audit_raw.txt:206:./docs/arqtech.md:12:| Trained weights | **NOT AVAILABLE** |
+docs/full_audit_raw.txt:207:./docs/arqtech.md:13:| mAP / precision / recall | **NOT AVAILABLE** |
+docs/full_audit_raw.txt:208:./docs/arqtech.md:14:| Live ARQTECH inference | **NOT AVAILABLE** |
+docs/full_audit_raw.txt:210:./docs/master_audit.md:22:| ARQTECH detection | NOT AVAILABLE | Classification checkpoints are refused by `ArqtechDetector`; reviewed detection annotations and postprocessing are still required |
+docs/full_audit_raw.txt:212:./src/arqtech/architecture.py:37:        "checkpoint": checkpoint_path or "NOT AVAILABLE",
+docs/full_audit_raw.txt:214:./src/arqtech/detector_interface.py:53:        raise NotImplementedError("ARQTECH forward pass not implemented — no trained weights.")
+docs/full_audit_raw.txt:224:./src/arqtech/inference/detector.py:50:        raise NotImplementedError(
+docs/full_audit_raw.txt:225:./src/camera/video_file.py:95:            "codec": "NOT AVAILABLE",
+docs/full_audit_raw.txt:226:./src/camera/video_file.py:174:            "format": p.suffix.lower().lstrip(".") if p.suffix else "NOT AVAILABLE",
+docs/full_audit_raw.txt:227:./src/camera/video_file.py:175:            "duration_s": duration if duration is not None else "NOT AVAILABLE",
+docs/full_audit_raw.txt:228:./src/camera/video_file.py:176:            "resolution": (self._width, self._height) if self._width else "NOT AVAILABLE",
+docs/full_audit_raw.txt:229:./src/camera/video_file.py:177:            "source_fps": self._file_fps if self._file_fps else "NOT AVAILABLE",
+docs/full_audit_raw.txt:230:./src/camera/video_file.py:178:            "frame_count": self._frame_count if self._frame_count else "NOT AVAILABLE",
+docs/full_audit_raw.txt:231:./src/camera/video_file.py:179:            "file_size_bytes": size if size is not None else "NOT AVAILABLE",
+docs/full_audit_raw.txt:232:./src/camera/video_file.py:180:            "codec": "NOT AVAILABLE",
+docs/full_audit_raw.txt:238:./src/ml/report.py:62:            "class_performance": "NOT MEASURED" if "precision" not in measured else measured.get("precision"),
+docs/full_audit_raw.txt:239:./src/ml/report.py:63:            "error_analysis": "NOT MEASURED",
+docs/full_audit_raw.txt:241:./src/robotics/world_model.py:15:    distance: str = "NOT AVAILABLE"
+docs/full_audit_raw.txt:242:./src/robotics/world_model.py:38:            distance=row.get("distance", "NOT AVAILABLE"),
+docs/full_audit_raw.txt:243:./src/vision/scene_narrative.py:37:    lines.append("Distance: NOT AVAILABLE (no calibrated depth).")
+docs/full_audit_raw.txt:244:./src/vision/calibration.py:30:        raise NotImplementedError("Ground-plane projection requires a validated calibration implementation")
+docs/full_audit_raw.txt:247:./tests/test_scene_robotics.py:19:    assert any("NOT AVAILABLE" in l for l in lines)
+docs/architecture_classification.md:43:| Old scaffold wording | DEPRECATE | Replace UI and docs labels such as `SCAFFOLD` when they understate the modular implementation, while retaining honest `EXPERIMENTAL` and `NOT TRAINED` states. |
+docs/second_audit.txt:38:app/streamlit_app.py:214:arq_status = describe_architecture().get("status", "NOT TRAINED")
+docs/second_audit.txt:39:src/arqtech/architecture.py:27:def describe_architecture(model_status: str = "NOT TRAINED", checkpoint_path: Optional[str] = None) -> Dict[str, Any]:
+docs/second_audit.txt:40:src/arqtech/architecture.py:28:    status = str(model_status or "NOT TRAINED").upper()
+docs/second_audit.txt:41:src/arqtech/architecture.py:37:        "checkpoint": checkpoint_path or "NOT AVAILABLE",
+docs/second_audit.txt:42:src/arqtech/detector_interface.py:45:        return self._record.get("model_type", "SCAFFOLD") if self._record else "SCAFFOLD"
+docs/second_audit.txt:43:src/arqtech/detector_interface.py:53:        raise NotImplementedError("ARQTECH forward pass not implemented — no trained weights.")
+docs/second_audit.txt:44:src/arqtech/inference/detector.py:50:        raise NotImplementedError(
+docs/second_audit.txt:45:src/arqtech/status.py:7:    NOT_TRAINED = "NOT TRAINED"
+docs/second_audit.txt:46:src/camera/video_file.py:95:            "codec": "NOT AVAILABLE",
+docs/second_audit.txt:47:src/camera/video_file.py:174:            "format": p.suffix.lower().lstrip(".") if p.suffix else "NOT AVAILABLE",
+docs/second_audit.txt:48:src/camera/video_file.py:175:            "duration_s": duration if duration is not None else "NOT AVAILABLE",
+docs/second_audit.txt:49:src/camera/video_file.py:176:            "resolution": (self._width, self._height) if self._width else "NOT AVAILABLE",
+docs/second_audit.txt:50:src/camera/video_file.py:177:            "source_fps": self._file_fps if self._file_fps else "NOT AVAILABLE",
+docs/second_audit.txt:51:src/camera/video_file.py:178:            "frame_count": self._frame_count if self._frame_count else "NOT AVAILABLE",
+docs/second_audit.txt:52:src/camera/video_file.py:179:            "file_size_bytes": size if size is not None else "NOT AVAILABLE",
+docs/second_audit.txt:53:src/camera/video_file.py:180:            "codec": "NOT AVAILABLE",
+docs/second_audit.txt:54:src/ml/report.py:43:        lifecycle_status = (model or {}).get("lifecycle_status") or (model or {}).get("status") or "NOT TRAINED"
+docs/second_audit.txt:55:src/ml/report.py:62:            "class_performance": "NOT MEASURED" if "precision" not in measured else measured.get("precision"),
+docs/second_audit.txt:56:src/ml/report.py:63:            "error_analysis": "NOT MEASURED",
+docs/second_audit.txt:57:src/ml/training_config.py:45:        "lifecycle_status": "NOT TRAINED",
+docs/second_audit.txt:58:src/robotics/world_model.py:16:    distance: str = "NOT AVAILABLE"
+docs/second_audit.txt:59:src/robotics/world_model.py:74:            distance=row.get("distance", "NOT AVAILABLE"),
+docs/second_audit.txt:60:src/vision/detector.py:34:    segmentation_status: str = "NOT AVAILABLE"
+docs/second_audit.txt:61:src/vision/scene_narrative.py:37:    lines.append("Distance: NOT AVAILABLE (no calibrated depth).")
+docs/second_audit.txt:62:src/vision/calibration.py:30:        raise NotImplementedError("Ground-plane projection requires a validated calibration implementation")
+docs/second_audit.txt:63:docs/arqtech.md:12:| Trained weights | **NOT AVAILABLE** |
+docs/second_audit.txt:64:docs/arqtech.md:13:| mAP / precision / recall | **NOT AVAILABLE** |
+docs/second_audit.txt:65:docs/arqtech.md:14:| Live ARQTECH inference | **NOT AVAILABLE** |
+docs/second_audit.txt:66:docs/arqtech.md:23:| Status | **ACTIVE** | **SCAFFOLD** |
+docs/second_audit.txt:67:docs/master_audit.md:22:| ARQTECH detection | NOT AVAILABLE | Classification checkpoints are refused by `ArqtechDetector`; reviewed detection annotations and postprocessing are still required |
+docs/second_audit.txt:68:docs/master_audit.md:23:| ARQTECH lifecycle | IMPLEMENTED | Controlled `NOT TRAINED`, `TRAINING`, `TRAINED`, `VALIDATING`, `VALIDATED`, `ACTIVE`, `ARCHIVED`, `FAILED` transitions |
+docs/second_audit.txt:69:docs/full_audit_raw.txt:178:./README.md:59:| ARQTECH object detection | NOT AVAILABLE without a reviewed detection checkpoint and postprocessing |
+docs/second_audit.txt:70:docs/full_audit_raw.txt:179:./README.md:65:| Metric depth / camera calibration | NOT AVAILABLE; default `NOT CALIBRATED` |
+docs/second_audit.txt:71:docs/full_audit_raw.txt:180:./README.md:66:| Real-world velocity / km/h | NOT AVAILABLE |
+docs/second_audit.txt:72:docs/full_audit_raw.txt:189:./config/default.yaml:52:  detection_status: NOT AVAILABLE WITHOUT REVIEWED DETECTION CHECKPOINT
+docs/second_audit.txt:73:docs/full_audit_raw.txt:206:./docs/arqtech.md:12:| Trained weights | **NOT AVAILABLE** |
+docs/second_audit.txt:74:docs/full_audit_raw.txt:207:./docs/arqtech.md:13:| mAP / precision / recall | **NOT AVAILABLE** |
+docs/second_audit.txt:75:docs/full_audit_raw.txt:208:./docs/arqtech.md:14:| Live ARQTECH inference | **NOT AVAILABLE** |
+docs/second_audit.txt:76:docs/full_audit_raw.txt:210:./docs/master_audit.md:22:| ARQTECH detection | NOT AVAILABLE | Classification checkpoints are refused by `ArqtechDetector`; reviewed detection annotations and postprocessing are still r
+README.md:59:| ARQTECH object detection | NOT AVAILABLE without a reviewed detection checkpoint and postprocessing |
+README.md:65:| Metric depth / camera calibration | NOT AVAILABLE; default `NOT CALIBRATED` |
+README.md:66:| Real-world velocity / km/h | NOT AVAILABLE |
+README.md:78:NOT TRAINED → TRAINING → TRAINED → VALIDATING → VALIDATED → ACTIVE → ARCHIVED
+=== REQUIRED MODULES ===
+src/motion/__init__.py
+src/motion/engine.py
+src/motion/prediction.py
+src/motion/trajectory.py
+src/motion/types.py
+src/segmentation/__init__.py
+src/segmentation/contour_segmenter.py
+src/simulation/__init__.py
+src/simulation/robot_simulation.py

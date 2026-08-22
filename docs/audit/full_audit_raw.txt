@@ -1,0 +1,757 @@
+=== TOP LEVEL ===
+.
+./.pytest_cache
+./.pytest_cache/v
+./app
+./app/__pycache__
+./config
+./data
+./data/experiments
+./data/models
+./docs
+./src
+./src/__pycache__
+./src/arqtech
+./src/brain
+./src/camera
+./src/core
+./src/input
+./src/integrations
+./src/learning
+./src/ml
+./src/planning
+./src/robotics
+./src/vision
+./tests
+./tests/__pycache__
+=== FILES ===
+.gitignore
+LICENSE
+README.md
+app/streamlit_app.py
+config/default.yaml
+data/experiments/arqtech_v01_b897bee2/result.json
+docs/arqtech.md
+docs/groq_api_notes.md
+docs/master_audit.md
+requirements-yolo.txt
+requirements.txt
+src/__init__.py
+src/arqtech/__init__.py
+src/arqtech/architecture.py
+src/arqtech/backbone/__init__.py
+src/arqtech/backbone/cnn.py
+src/arqtech/detector_interface.py
+src/arqtech/experiment_log.py
+src/arqtech/heads/__init__.py
+src/arqtech/heads/classification.py
+src/arqtech/heads/detection.py
+src/arqtech/inference/__init__.py
+src/arqtech/inference/detector.py
+src/arqtech/inference/engine.py
+src/arqtech/loss/__init__.py
+src/arqtech/loss/classification.py
+src/arqtech/model/__init__.py
+src/arqtech/model/arqtech_model.py
+src/arqtech/model_v01.py
+src/arqtech/registry.py
+src/arqtech/status.py
+src/arqtech/synthetic_data.py
+src/arqtech/train.py
+src/arqtech/training/__init__.py
+src/arqtech/training/engine.py
+src/arqtech/validation/__init__.py
+src/arqtech/validation/classification.py
+src/brain/__init__.py
+src/brain/decision_engine.py
+src/brain/risk_engine.py
+src/brain/uncertainty.py
+src/camera/__init__.py
+src/camera/base.py
+src/camera/ip_camera.py
+src/camera/smartphone.py
+src/camera/video_file.py
+src/camera/video_metadata.py
+src/camera/webcam.py
+src/core/__init__.py
+src/core/pipeline.py
+src/core/timing.py
+src/input/__init__.py
+src/input/frame_buffer.py
+src/input/manager.py
+src/input/resolver.py
+src/input/security.py
+src/input/smart_capture.py
+src/input/types.py
+src/integrations/__init__.py
+src/integrations/groq_client.py
+src/integrations/secrets.py
+src/learning/__init__.py
+src/learning/experience.py
+src/learning/frame_cache.py
+src/ml/__init__.py
+src/ml/active_learning.py
+src/ml/dataset_builder.py
+src/ml/dataset_inspect.py
+src/ml/report.py
+src/ml/training_config.py
+src/planning/__init__.py
+src/planning/image_planner.py
+src/planning/obstacle_fusion.py
+src/planning/occupancy.py
+src/robotics/__init__.py
+src/robotics/navigation_state.py
+src/robotics/world_model.py
+src/vision/__init__.py
+src/vision/annotator.py
+src/vision/calibration.py
+src/vision/detector.py
+src/vision/geometry.py
+src/vision/navigation_relevance.py
+src/vision/nms.py
+src/vision/orchestrator.py
+src/vision/perception_config.py
+src/vision/preprocessing.py
+src/vision/scene.py
+src/vision/scene_narrative.py
+src/vision/temporal_smoothing.py
+src/vision/tracker.py
+src/vision/video_analysis.py
+src/vision/yolo_adapter.py
+tests/test_arqtech.py
+tests/test_camera_learning_geometry.py
+tests/test_camera_occupancy.py
+tests/test_experience_learning.py
+tests/test_groq_integration.py
+tests/test_input_layer.py
+tests/test_ml_pipeline.py
+tests/test_perception_upgrade.py
+tests/test_pipeline.py
+tests/test_scene_robotics.py
+tests/test_uncertainty_tracker.py
+tests/test_video_analysis.py
+tests/test_video_metadata.py
+tests/test_yolo_baseline_tracking.py
+=== PYTHON FILE COUNT ===
+97
+=== TEST FILES ===
+tests/test_arqtech.py
+tests/test_camera_learning_geometry.py
+tests/test_camera_occupancy.py
+tests/test_experience_learning.py
+tests/test_groq_integration.py
+tests/test_input_layer.py
+tests/test_ml_pipeline.py
+tests/test_perception_upgrade.py
+tests/test_pipeline.py
+tests/test_scene_robotics.py
+tests/test_uncertainty_tracker.py
+tests/test_video_analysis.py
+tests/test_video_metadata.py
+tests/test_yolo_baseline_tracking.py
+=== REQUIREMENTS ===
+numpy>=1.24.0
+opencv-python-headless>=4.8.0
+scipy>=1.11.0
+Pillow>=10.0.0
+streamlit>=1.28.0
+PyYAML>=6.0
+requests>=2.31.0
+torch>=2.0.0
+pytest>=7.4.0
+---
+./requirements.txt
+numpy>=1.24.0
+opencv-python-headless>=4.8.0
+scipy>=1.11.0
+Pillow>=10.0.0
+streamlit>=1.28.0
+PyYAML>=6.0
+requests>=2.31.0
+torch>=2.0.0
+pytest>=7.4.0
+./requirements-yolo.txt
+# Optional external neural baseline; the application runs without this package.
+ultralytics>=8.3.0
+=== PLACEHOLDERS / CLAIMS ===
+./README.md:58:| ARQTECH training | IMPLEMENTED for synthetic patch classification bootstrap only |
+./README.md:59:| ARQTECH object detection | NOT AVAILABLE without a reviewed detection checkpoint and postprocessing |
+./README.md:65:| Metric depth / camera calibration | NOT AVAILABLE; default `NOT CALIBRATED` |
+./README.md:66:| Real-world velocity / km/h | NOT AVAILABLE |
+./README.md:73:ARQTECH is the model owned by this repository and is implemented with PyTorch. Its current real training scope is a synthetic patch classification bootstrap. A checkpoint from that experiment is not an object detector and is not a production benchmark.
+./README.md:199:This is a monocular engineering laboratory. It does not provide metric depth, validated camera calibration, physical robot control, SLAM, ROS 2 integration or a production object-detection benchmark. Synthetic classification accuracy is scoped to its synthetic hold-out and must not be reported as detection mAP or real-world performance.
+./app/streamlit_app.py:111:            ip_url = st.text_input("Stream URL / path", placeholder="http://192.168.0.10:8080/video")
+./app/streamlit_app.py:164:        except Exception: pass
+./app/streamlit_app.py:298:                except Exception: pass
+./app/streamlit_app.py:390:                except Exception: pass
+./app/streamlit_app.py:465:    st.warning("Bootstrap training uses synthetic patch classification only. It does not create a production object detector.")
+./app/streamlit_app.py:472:            dataset_id="synthetic_patches", epochs=train_epochs,
+./config/default.yaml:52:  detection_status: NOT AVAILABLE WITHOUT REVIEWED DETECTION CHECKPOINT
+./data/experiments/arqtech_v01_b897bee2/result.json:15:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_20ce3c0c/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_918e3896/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_31ecb12c/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_80398116/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_f00f0b54/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_16f57802/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_761a5a4c/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_ff92b000/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_a34eb024/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_26a12ce9/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_80808741/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_690f746a/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_2214d43c/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_27d9c588/result.json:23:  "dataset": "synthetic_patches",
+./data/experiments/arqtech_v01_7e1ad53d/result.json:23:  "dataset": "synthetic_patches",
+./docs/arqtech.md:12:| Trained weights | **NOT AVAILABLE** |
+./docs/arqtech.md:13:| mAP / precision / recall | **NOT AVAILABLE** |
+./docs/arqtech.md:14:| Live ARQTECH inference | **NOT AVAILABLE** |
+./docs/master_audit.md:21:| ARQTECH training | IMPLEMENTED EXPERIMENTAL | Real gradient descent on synthetic patch classification, checkpoint and registry record |
+./docs/master_audit.md:22:| ARQTECH detection | NOT AVAILABLE | Classification checkpoints are refused by `ArqtechDetector`; reviewed detection annotations and postprocessing are still required |
+./docs/master_audit.md:32:ARQTECH's current training task is synthetic patch classification. Its validation accuracy, if produced, is valid only for the supplied synthetic hold-out and is not object-detection mAP, precision or recall. No production object detector is claimed.
+./src/arqtech/architecture.py:37:        "checkpoint": checkpoint_path or "NOT AVAILABLE",
+./src/arqtech/detector_interface.py:36:    def __init__(self, version="ARQTECH-v0.0-scaffold", registry=None):
+./src/arqtech/detector_interface.py:53:        raise NotImplementedError("ARQTECH forward pass not implemented — no trained weights.")
+./src/arqtech/detector_interface.py:57:        b = ArqtechBackend(version=preference if preference != "arqtech" else "ARQTECH-v0.0-scaffold")
+./src/arqtech/experiment_log.py:32:    def create(self, title, model_version="ARQTECH-v0.0-scaffold", architecture_notes="",
+./src/arqtech/experiment_log.py:52:                except json.JSONDecodeError: pass
+./src/arqtech/registry.py:78:        # Keep the synthetic built-in baseline out of the persistent file.
+./src/arqtech/train.py:15:from .synthetic_data import SyntheticPatchDataset
+./src/arqtech/train.py:81:        "dataset": "synthetic_patches",
+./src/arqtech/train.py:84:            "Bootstrap on synthetic patches only.",
+./src/arqtech/train.py:104:        dataset="synthetic_patches",
+./src/arqtech/model/arqtech_model.py:17:    existing synthetic bootstrap loop. Detection outputs are exposed through
+./src/arqtech/inference/detector.py:50:        raise NotImplementedError(
+./src/camera/video_file.py:95:            "codec": "NOT AVAILABLE",
+./src/camera/video_file.py:174:            "format": p.suffix.lower().lstrip(".") if p.suffix else "NOT AVAILABLE",
+./src/camera/video_file.py:175:            "duration_s": duration if duration is not None else "NOT AVAILABLE",
+./src/camera/video_file.py:176:            "resolution": (self._width, self._height) if self._width else "NOT AVAILABLE",
+./src/camera/video_file.py:177:            "source_fps": self._file_fps if self._file_fps else "NOT AVAILABLE",
+./src/camera/video_file.py:178:            "frame_count": self._frame_count if self._frame_count else "NOT AVAILABLE",
+./src/camera/video_file.py:179:            "file_size_bytes": size if size is not None else "NOT AVAILABLE",
+./src/camera/video_file.py:180:            "codec": "NOT AVAILABLE",
+./src/camera/video_metadata.py:94:                        pass
+./src/camera/video_metadata.py:147:                pass
+./src/input/manager.py:67:            except Exception: pass
+./src/input/manager.py:93:            except Exception: pass
+./src/ml/dataset_builder.py:101:            except json.JSONDecodeError: pass
+./src/ml/report.py:62:            "class_performance": "NOT MEASURED" if "precision" not in measured else measured.get("precision"),
+./src/ml/report.py:63:            "error_analysis": "NOT MEASURED",
+./src/planning/image_planner.py:85:                pass
+./src/robotics/world_model.py:15:    distance: str = "NOT AVAILABLE"
+./src/robotics/world_model.py:38:            distance=row.get("distance", "NOT AVAILABLE"),
+./src/vision/scene_narrative.py:37:    lines.append("Distance: NOT AVAILABLE (no calibrated depth).")
+./src/vision/calibration.py:30:        raise NotImplementedError("Ground-plane projection requires a validated calibration implementation")
+./tests/test_arqtech.py:26:        pass
+./tests/test_ml_pipeline.py:28:        pass
+./tests/test_scene_robotics.py:19:    assert any("NOT AVAILABLE" in l for l in lines)
+./tests/test_yolo_baseline_tracking.py:68:            pass
+=== IMPORTS / POTENTIAL DUPLICATES ===
+src/arqtech/__init__.py:1:from .architecture import describe_architecture
+src/arqtech/__init__.py:2:from .registry import ModelRegistry
+src/arqtech/__init__.py:3:from .status import ModelStatus, can_transition, transition
+src/arqtech/__init__.py:4:from .experiment_log import ExperimentLog
+src/arqtech/architecture.py:1:from __future__ import annotations
+src/arqtech/architecture.py:3:from dataclasses import dataclass, field, asdict
+src/arqtech/architecture.py:4:from typing import Any, Dict, List, Optional
+src/arqtech/detector_interface.py:2:from __future__ import annotations
+src/arqtech/detector_interface.py:3:from abc import ABC, abstractmethod
+src/arqtech/detector_interface.py:4:from typing import List, Optional
+src/arqtech/detector_interface.py:5:import numpy as np
+src/arqtech/detector_interface.py:6:from ..vision.detector import ClassicalDetector, Detection
+src/arqtech/detector_interface.py:7:from .registry import ModelRegistry
+src/arqtech/experiment_log.py:2:from __future__ import annotations
+src/arqtech/experiment_log.py:3:import json, time, uuid
+src/arqtech/experiment_log.py:4:from dataclasses import dataclass, field, asdict
+src/arqtech/experiment_log.py:5:from pathlib import Path
+src/arqtech/experiment_log.py:6:from typing import Any, Dict, List, Optional
+src/arqtech/model_v01.py:1:from __future__ import annotations
+src/arqtech/model_v01.py:3:from typing import List
+src/arqtech/model_v01.py:5:from .model.arqtech_model import ARQTECHModel, count_parameters
+src/arqtech/registry.py:2:from __future__ import annotations
+src/arqtech/registry.py:4:import json
+src/arqtech/registry.py:5:import time
+src/arqtech/registry.py:6:from pathlib import Path
+src/arqtech/registry.py:7:from typing import Any, Dict, List, Optional
+src/arqtech/registry.py:9:from .status import ModelStatus, can_transition, transition
+src/arqtech/synthetic_data.py:2:from __future__ import annotations
+src/arqtech/synthetic_data.py:3:from typing import Tuple
+src/arqtech/synthetic_data.py:4:import numpy as np
+src/arqtech/synthetic_data.py:5:import torch
+src/arqtech/synthetic_data.py:6:from torch.utils.data import Dataset
+src/arqtech/train.py:1:from __future__ import annotations
+src/arqtech/train.py:3:import json
+src/arqtech/train.py:4:import uuid
+src/arqtech/train.py:5:from dataclasses import dataclass, asdict, field
+src/arqtech/train.py:6:from pathlib import Path
+src/arqtech/train.py:7:from typing import List, Optional
+src/arqtech/train.py:9:import torch
+src/arqtech/train.py:10:from torch.utils.data import DataLoader, random_split
+src/arqtech/train.py:12:from .model_v01 import ARQTechV01, CLASS_NAMES, count_parameters
+src/arqtech/train.py:13:from .registry import register_train_result
+src/arqtech/train.py:14:from .status import ModelStatus
+src/arqtech/train.py:15:from .synthetic_data import SyntheticPatchDataset
+src/arqtech/train.py:16:from .training.engine import fit_classification
+src/arqtech/model/arqtech_model.py:1:from __future__ import annotations
+src/arqtech/model/arqtech_model.py:3:from typing import Dict, List
+src/arqtech/model/arqtech_model.py:5:import torch
+src/arqtech/model/arqtech_model.py:6:import torch.nn as nn
+src/arqtech/model/arqtech_model.py:8:from ..backbone.cnn import TinyConvBackbone
+src/arqtech/model/arqtech_model.py:9:from ..heads.classification import ClassificationHead
+src/arqtech/model/arqtech_model.py:10:from ..heads.detection import DetectionHead
+src/arqtech/model/__init__.py:1:from .arqtech_model import ARQTECHModel, count_parameters
+src/arqtech/backbone/cnn.py:1:from __future__ import annotations
+src/arqtech/backbone/cnn.py:3:import torch
+src/arqtech/backbone/cnn.py:4:import torch.nn as nn
+src/arqtech/backbone/__init__.py:1:from .cnn import TinyConvBackbone
+src/arqtech/heads/classification.py:1:from __future__ import annotations
+src/arqtech/heads/classification.py:3:import torch
+src/arqtech/heads/classification.py:4:import torch.nn as nn
+src/arqtech/heads/detection.py:1:from __future__ import annotations
+src/arqtech/heads/detection.py:3:import torch
+src/arqtech/heads/detection.py:4:import torch.nn as nn
+src/arqtech/heads/__init__.py:1:from .classification import ClassificationHead
+src/arqtech/heads/__init__.py:2:from .detection import DetectionHead
+src/arqtech/loss/classification.py:1:from __future__ import annotations
+src/arqtech/loss/classification.py:3:import torch
+src/arqtech/loss/classification.py:4:import torch.nn.functional as F
+src/arqtech/loss/__init__.py:1:from .classification import classification_loss
+src/arqtech/training/engine.py:1:from __future__ import annotations
+src/arqtech/training/engine.py:3:import time
+src/arqtech/training/engine.py:4:from dataclasses import dataclass, field
+src/arqtech/training/engine.py:5:from typing import Callable, Dict, List, Optional
+src/arqtech/training/engine.py:7:import torch
+src/arqtech/training/engine.py:8:import torch.nn as nn
+src/arqtech/training/engine.py:9:from torch.utils.data import DataLoader
+src/arqtech/training/__init__.py:1:from .engine import FitResult, fit_classification
+src/arqtech/validation/classification.py:1:from __future__ import annotations
+src/arqtech/validation/classification.py:3:from dataclasses import dataclass, asdict
+src/arqtech/validation/classification.py:4:from typing import List
+src/arqtech/validation/classification.py:6:import torch
+src/arqtech/validation/classification.py:7:from torch.utils.data import DataLoader
+src/arqtech/validation/__init__.py:1:from .classification import ValidationResult, validate_classification
+src/arqtech/inference/engine.py:1:from __future__ import annotations
+src/arqtech/inference/engine.py:3:from pathlib import Path
+src/arqtech/inference/engine.py:4:from typing import Optional
+src/arqtech/inference/engine.py:6:import torch
+src/arqtech/inference/engine.py:8:from ..model.arqtech_model import ARQTECHModel
+src/arqtech/inference/__init__.py:1:from .engine import ARQTECHInference
+src/arqtech/inference/__init__.py:2:from .detector import ArqtechDetector
+src/arqtech/inference/detector.py:1:from __future__ import annotations
+src/arqtech/inference/detector.py:3:from typing import List, Optional
+src/arqtech/inference/detector.py:5:import numpy as np
+src/arqtech/inference/detector.py:7:from ..model_v01 import CLASS_NAMES
+src/arqtech/inference/detector.py:8:from .engine import ARQTECHInference
+src/arqtech/status.py:1:from __future__ import annotations
+src/arqtech/status.py:3:from enum import Enum
+src/brain/__init__.py:1:from .risk_engine import RiskEngine, RiskAssessment
+src/brain/__init__.py:2:from .decision_engine import DecisionEngine, SceneDecision
+src/brain/__init__.py:3:from .uncertainty import UncertaintyEngine, UncertaintyReport
+src/brain/decision_engine.py:2:from __future__ import annotations
+src/brain/decision_engine.py:3:from dataclasses import dataclass
+src/brain/risk_engine.py:2:from __future__ import annotations
+src/brain/risk_engine.py:3:from dataclasses import dataclass, field
+src/brain/risk_engine.py:4:from typing import Dict, List, Optional
+src/brain/risk_engine.py:5:from ..vision.scene import SceneAnalysis
+src/brain/uncertainty.py:9:from __future__ import annotations
+src/brain/uncertainty.py:11:from dataclasses import dataclass, field
+src/brain/uncertainty.py:12:from typing import Dict, List
+src/brain/uncertainty.py:14:import numpy as np
+src/brain/uncertainty.py:16:from ..vision.detector import Detection
+src/camera/__init__.py:1:from .base import CameraSource, FramePacket, CameraStatus
+src/camera/__init__.py:2:from .webcam import WebcamSource
+src/camera/__init__.py:3:from .ip_camera import IPCameraSource
+src/camera/__init__.py:4:from .video_file import VideoFileSource
+src/camera/__init__.py:5:from .smartphone import SmartphoneCameraSource
+src/camera/__init__.py:6:from .video_metadata import obtain_video_metadata, empty_metadata
+src/camera/base.py:1:from __future__ import annotations
+src/camera/base.py:3:from abc import ABC, abstractmethod
+src/camera/base.py:4:from dataclasses import dataclass, field
+src/camera/base.py:5:from typing import Any, Dict, Optional, Tuple
+src/camera/base.py:7:import numpy as np
+src/camera/ip_camera.py:2:from __future__ import annotations
+src/camera/ip_camera.py:3:import time
+src/camera/ip_camera.py:4:from typing import Optional
+src/camera/ip_camera.py:5:import cv2
+src/camera/ip_camera.py:6:from .base import CameraSource, CameraStatus, FramePacket
+src/camera/smartphone.py:2:from __future__ import annotations
+src/camera/smartphone.py:3:import time
+src/camera/smartphone.py:4:from typing import Optional
+src/camera/smartphone.py:5:import cv2
+src/camera/smartphone.py:6:from .base import CameraSource, CameraStatus, FramePacket
+src/camera/video_file.py:2:from __future__ import annotations
+src/camera/video_file.py:3:import time
+src/camera/video_file.py:4:from pathlib import Path as PathLib
+src/camera/video_file.py:5:from typing import Any, Dict, Optional
+src/camera/video_file.py:6:import cv2
+src/camera/video_file.py:7:from .base import CameraSource, CameraStatus, FramePacket
+src/camera/video_metadata.py:9:from __future__ import annotations
+src/camera/video_metadata.py:10:import logging
+src/camera/video_metadata.py:11:from pathlib import Path
+src/camera/video_metadata.py:12:from typing import Any, Dict, Optional
+src/camera/webcam.py:2:from __future__ import annotations
+src/camera/webcam.py:3:import time
+src/camera/webcam.py:4:from typing import Optional
+src/camera/webcam.py:5:import cv2
+src/camera/webcam.py:6:from .base import CameraSource, CameraStatus, FramePacket
+src/core/pipeline.py:1:from __future__ import annotations
+src/core/pipeline.py:3:import time
+src/core/pipeline.py:4:from dataclasses import dataclass, field
+src/core/pipeline.py:5:from typing import Any, Dict, List, Optional, Tuple
+src/core/pipeline.py:7:import numpy as np
+src/core/pipeline.py:9:from ..vision.detector import ClassicalDetector, Detection
+src/core/pipeline.py:10:from ..vision.scene import SceneAnalyzer, SceneAnalysis
+src/core/pipeline.py:11:from ..vision.annotator import annotate_detections, overlay_free_space, draw_path
+src/core/pipeline.py:12:from ..vision.geometry import GeometryEngine, ObjectGeometry
+src/core/pipeline.py:13:from ..vision.preprocessing import Preprocessor, PreprocessResult
+src/core/pipeline.py:14:from ..vision.tracker import IoUTracker, Track
+src/core/pipeline.py:15:from ..vision.nms import nms_detections
+src/core/pipeline.py:16:from ..vision.temporal_smoothing import TemporalSmoother
+src/core/pipeline.py:17:from ..vision.perception_config import (
+src/core/pipeline.py:25:from ..vision.yolo_adapter import YoloDetector
+src/core/pipeline.py:26:from ..vision.orchestrator import PerceptionOrchestrator, OrchestrationResult
+src/core/pipeline.py:27:from ..planning.obstacle_fusion import fuse_obstacles, fusion_stats
+src/core/pipeline.py:28:from ..brain.risk_engine import RiskEngine, RiskAssessment
+src/core/pipeline.py:29:from ..brain.decision_engine import DecisionEngine, SceneDecision
+src/core/pipeline.py:30:from ..brain.uncertainty import UncertaintyEngine, UncertaintyReport
+src/core/pipeline.py:31:from ..planning.image_planner import ImageSpacePlanner, ImagePlanResult
+src/core/pipeline.py:32:from ..planning.occupancy import build_occupancy_from_mask, build_cost_map, OccupancyGrid
+src/core/pipeline.py:33:from ..vision.navigation_relevance import enrich_detections
+src/core/pipeline.py:34:from ..vision.scene_narrative import build_narrative, scene_inventory
+src/core/pipeline.py:35:from ..robotics.world_model import WorldModel
+src/core/pipeline.py:36:from ..robotics.navigation_state import NavigationController
+src/core/pipeline.py:37:from ..integrations import GroqClient
+src/core/pipeline.py:42:from .timing import LatencyBreakdown, measure
+src/core/timing.py:2:from __future__ import annotations
+src/core/timing.py:3:import time
+src/core/timing.py:4:from contextlib import contextmanager
+src/core/timing.py:5:from dataclasses import dataclass, field
+src/core/timing.py:6:from typing import Dict, Iterator
+src/input/__init__.py:1:from .types import SourceType, InputDescriptor
+src/input/__init__.py:2:from .resolver import StreamResolver, ResolveResult
+src/input/__init__.py:3:from .manager import InputManager, ConnectionDiagnostics
+src/input/__init__.py:4:from .frame_buffer import FrameBuffer
+src/input/__init__.py:5:from .smart_capture import SmartCapturePolicy, should_capture
+src/input/__init__.py:6:from .security import mask_url
+src/input/frame_buffer.py:1:from __future__ import annotations
+src/input/frame_buffer.py:3:from collections import deque
+src/input/frame_buffer.py:4:from dataclasses import dataclass
+src/input/frame_buffer.py:5:from typing import Deque, Optional
+src/input/frame_buffer.py:7:from ..camera.base import FramePacket
+src/input/manager.py:2:from __future__ import annotations
+src/input/manager.py:3:import time
+src/input/manager.py:4:from dataclasses import dataclass
+src/input/manager.py:5:from typing import Any, Dict, Optional
+src/input/manager.py:6:from ..camera.base import CameraSource, FramePacket
+src/input/manager.py:7:from ..camera.webcam import WebcamSource
+src/input/manager.py:8:from ..camera.ip_camera import IPCameraSource
+src/input/manager.py:9:from ..camera.smartphone import SmartphoneCameraSource
+src/input/manager.py:10:from ..camera.video_file import VideoFileSource
+src/input/manager.py:11:from .types import SourceType, InputDescriptor
+src/input/manager.py:12:from .resolver import StreamResolver, ResolveResult
+src/input/manager.py:13:from .frame_buffer import FrameBuffer
+src/input/resolver.py:2:from __future__ import annotations
+src/input/resolver.py:3:import re
+src/input/resolver.py:4:from dataclasses import dataclass
+src/input/resolver.py:5:from typing import Optional
+src/input/resolver.py:6:from .types import SourceType, InputDescriptor
+src/input/resolver.py:7:from .security import mask_url
+src/input/security.py:1:from __future__ import annotations
+src/input/security.py:2:import re
+src/input/smart_capture.py:1:from __future__ import annotations
+src/input/smart_capture.py:2:import time
+src/input/smart_capture.py:3:from dataclasses import dataclass
+src/input/smart_capture.py:4:from typing import Any, List, Optional
+src/input/types.py:1:from __future__ import annotations
+src/input/types.py:2:from dataclasses import dataclass
+src/input/types.py:3:from enum import Enum
+src/learning/__init__.py:1:from .experience import ExperienceMemory, ExperienceSample
+src/learning/__init__.py:2:from .frame_cache import FrameCache
+src/learning/experience.py:2:from __future__ import annotations
+src/learning/experience.py:3:import hashlib, json, time
+src/learning/experience.py:4:from dataclasses import dataclass, field, asdict
+src/learning/experience.py:5:from pathlib import Path
+src/learning/experience.py:6:from typing import Any, Dict, List, Optional
+src/learning/experience.py:7:import cv2
+src/learning/experience.py:8:import numpy as np
+src/learning/frame_cache.py:2:from __future__ import annotations
+src/learning/frame_cache.py:3:from collections import deque
+src/learning/frame_cache.py:4:from dataclasses import dataclass
+src/learning/frame_cache.py:5:from typing import Deque, Optional
+src/learning/frame_cache.py:6:import time
+src/learning/frame_cache.py:7:import numpy as np
+src/ml/__init__.py:1:from .dataset_builder import DatasetBuilder, DatasetManifest
+src/ml/__init__.py:2:from .active_learning import rank_for_review
+src/ml/__init__.py:3:from .report import LearningReportGenerator
+src/ml/__init__.py:4:from .training_config import TrainingConfig, save_training_config
+src/ml/__init__.py:5:from .dataset_inspect import inspect_manifest
+src/ml/active_learning.py:2:from __future__ import annotations
+src/ml/active_learning.py:3:from typing import Any, Dict, List
+src/ml/dataset_builder.py:2:from __future__ import annotations
+src/ml/dataset_builder.py:3:import json, random, shutil, time
+src/ml/dataset_builder.py:4:from dataclasses import dataclass, field, asdict
+src/ml/dataset_builder.py:5:from pathlib import Path
+src/ml/dataset_builder.py:6:from typing import Any, Dict, List, Optional
+src/ml/dataset_inspect.py:1:from __future__ import annotations
+src/ml/dataset_inspect.py:2:from typing import Any, Dict, List
+src/ml/report.py:1:from __future__ import annotations
+src/ml/report.py:3:import json
+src/ml/report.py:4:import time
+src/ml/report.py:5:from pathlib import Path
+src/ml/report.py:6:from typing import Any, Dict, List, Optional
+src/ml/training_config.py:1:from __future__ import annotations
+src/ml/training_config.py:3:import json
+src/ml/training_config.py:4:import platform
+src/ml/training_config.py:5:import time
+src/ml/training_config.py:6:from dataclasses import dataclass, field, asdict
+src/ml/training_config.py:7:from pathlib import Path
+src/ml/training_config.py:8:from typing import Any, Dict, List, Optional
+src/planning/__init__.py:1:from .image_planner import ImageSpacePlanner, ImagePlanResult
+src/planning/image_planner.py:2:from __future__ import annotations
+src/planning/image_planner.py:3:import heapq, math, time
+src/planning/image_planner.py:4:from dataclasses import dataclass, field
+src/planning/image_planner.py:5:from typing import List, Optional, Tuple
+src/planning/image_planner.py:6:import numpy as np
+src/planning/obstacle_fusion.py:2:from __future__ import annotations
+src/planning/obstacle_fusion.py:3:from dataclasses import dataclass
+src/planning/obstacle_fusion.py:4:from typing import Any, Dict, List, Tuple
+src/planning/obstacle_fusion.py:5:import numpy as np
+src/planning/occupancy.py:2:from __future__ import annotations
+src/planning/occupancy.py:3:from dataclasses import dataclass
+src/planning/occupancy.py:4:from typing import Tuple
+src/planning/occupancy.py:5:import numpy as np
+src/robotics/__init__.py:1:from .navigation_state import (
+src/robotics/__init__.py:8:from .world_model import WorldModel
+src/robotics/navigation_state.py:2:from __future__ import annotations
+src/robotics/navigation_state.py:3:from dataclasses import dataclass, field
+src/robotics/navigation_state.py:4:from typing import Any, Dict, List, Optional
+src/robotics/world_model.py:2:from __future__ import annotations
+src/robotics/world_model.py:3:from dataclasses import dataclass, field, asdict
+src/robotics/world_model.py:4:from typing import List, Optional
+src/vision/__init__.py:1:from .detector import ClassicalDetector, Detection
+src/vision/__init__.py:2:from .yolo_adapter import YoloDetector
+src/vision/__init__.py:3:from .orchestrator import PerceptionOrchestrator, OrchestrationResult, ModelEvidence
+src/vision/__init__.py:4:from .temporal_smoothing import TemporalSmoother
+src/vision/__init__.py:5:from .perception_config import PerceptionConfig
+src/vision/__init__.py:6:from .calibration import CameraCalibration
+src/vision/__init__.py:7:from .scene import SceneAnalyzer, SceneAnalysis
+src/vision/__init__.py:8:from .geometry import box_iou, resize_keep_aspect
+src/vision/__init__.py:9:from .annotator import annotate_detections, overlay_free_space, draw_path
+src/vision/annotator.py:2:from __future__ import annotations
+src/vision/annotator.py:3:from typing import List, Tuple
+src/vision/annotator.py:4:import cv2
+src/vision/annotator.py:5:import numpy as np
+src/vision/annotator.py:6:from .detector import Detection
+src/vision/detector.py:1:from __future__ import annotations
+src/vision/detector.py:3:from dataclasses import dataclass, field
+src/vision/detector.py:4:from typing import List, Optional, Tuple
+src/vision/detector.py:6:import cv2
+src/vision/detector.py:7:import numpy as np
+src/vision/detector.py:9:from .geometry import box_iou
+src/vision/geometry.py:2:from __future__ import annotations
+src/vision/geometry.py:3:from dataclasses import dataclass
+src/vision/geometry.py:4:from typing import Any, List, Optional, Sequence, Tuple
+src/vision/geometry.py:5:import cv2
+src/vision/geometry.py:6:import numpy as np
+src/vision/navigation_relevance.py:1:from __future__ import annotations
+src/vision/navigation_relevance.py:3:from typing import Dict, List, Optional
+src/vision/navigation_relevance.py:5:from .perception_config import DEFAULT_CLASS_MAPPING
+src/vision/nms.py:2:from __future__ import annotations
+src/vision/nms.py:3:from typing import List
+src/vision/nms.py:4:from .detector import Detection
+src/vision/nms.py:5:from .geometry import box_iou
+src/vision/preprocessing.py:2:from __future__ import annotations
+src/vision/preprocessing.py:3:from dataclasses import dataclass
+src/vision/preprocessing.py:4:from typing import Dict
+src/vision/preprocessing.py:5:import cv2
+src/vision/preprocessing.py:6:import numpy as np
+src/vision/preprocessing.py:7:from ..core.timing import LatencyBreakdown, measure
+src/vision/scene.py:2:from __future__ import annotations
+src/vision/scene.py:3:from dataclasses import dataclass, field
+src/vision/scene.py:4:from typing import Dict, List, Optional, Tuple
+src/vision/scene.py:5:import cv2
+src/vision/scene.py:6:import numpy as np
+src/vision/scene.py:7:from .detector import Detection
+src/vision/scene.py:8:from .geometry import lower_roi
+src/vision/scene_narrative.py:2:from __future__ import annotations
+src/vision/scene_narrative.py:3:from collections import Counter
+src/vision/scene_narrative.py:4:from typing import Any, Dict, List, Optional
+src/vision/tracker.py:2:from __future__ import annotations
+src/vision/tracker.py:4:from dataclasses import dataclass, field
+src/vision/tracker.py:5:from typing import Dict, List, Optional, Tuple
+src/vision/tracker.py:7:from .detector import Detection
+src/vision/tracker.py:8:from .geometry import box_iou
+src/vision/video_analysis.py:1:from __future__ import annotations
+src/vision/video_analysis.py:3:from collections import Counter
+src/vision/video_analysis.py:4:from dataclasses import dataclass, field, asdict
+src/vision/video_analysis.py:5:from typing import Dict, List, Optional
+src/vision/video_analysis.py:7:import numpy as np
+src/vision/video_analysis.py:9:from ..core.pipeline import AnalysisPipeline, AnalysisResult
+src/vision/perception_config.py:1:from __future__ import annotations
+src/vision/perception_config.py:3:from dataclasses import dataclass, field
+src/vision/perception_config.py:4:from typing import Dict, Optional, Sequence
+src/vision/yolo_adapter.py:1:from __future__ import annotations
+src/vision/yolo_adapter.py:3:from typing import List, Optional
+src/vision/yolo_adapter.py:5:import numpy as np
+src/vision/yolo_adapter.py:7:from .detector import Detection
+src/vision/temporal_smoothing.py:1:from __future__ import annotations
+src/vision/temporal_smoothing.py:3:from collections import defaultdict, deque
+src/vision/temporal_smoothing.py:4:from typing import Iterable
+src/vision/temporal_smoothing.py:6:from .perception_config import SMOOTHING_EXPONENTIAL, SMOOTHING_MOVING_AVERAGE, SMOOTHING_RAW
+src/vision/calibration.py:1:from __future__ import annotations
+src/vision/calibration.py:3:from dataclasses import dataclass, field
+src/vision/calibration.py:4:from typing import Optional, Sequence
+src/vision/orchestrator.py:1:from __future__ import annotations
+src/vision/orchestrator.py:3:import time
+src/vision/orchestrator.py:4:from dataclasses import asdict, dataclass, field, replace
+src/vision/orchestrator.py:5:from typing import Dict, Iterable, List, Mapping, Optional
+src/vision/orchestrator.py:7:from .detector import Detection
+src/vision/orchestrator.py:8:from .geometry import box_iou
+src/integrations/secrets.py:1:from __future__ import annotations
+src/integrations/secrets.py:3:import os
+src/integrations/secrets.py:4:from typing import Optional
+src/integrations/groq_client.py:1:from __future__ import annotations
+src/integrations/groq_client.py:3:import base64
+src/integrations/groq_client.py:4:import json
+src/integrations/groq_client.py:5:import os
+src/integrations/groq_client.py:6:import time
+src/integrations/groq_client.py:7:from dataclasses import asdict, dataclass, field
+src/integrations/groq_client.py:8:from typing import Any, Dict, Optional
+src/integrations/groq_client.py:10:import cv2
+src/integrations/groq_client.py:11:import numpy as np
+src/integrations/groq_client.py:12:import requests
+src/integrations/groq_client.py:14:from .secrets import SecretProvider
+src/integrations/__init__.py:1:from .secrets import SecretProvider
+src/integrations/__init__.py:2:from .groq_client import GroqAnalysis, GroqClient, GroqConfig
+app/streamlit_app.py:2:from __future__ import annotations
+app/streamlit_app.py:3:import io, sys, time, uuid, tempfile, re
+app/streamlit_app.py:4:from pathlib import Path
+app/streamlit_app.py:5:import cv2
+app/streamlit_app.py:6:import numpy as np
+app/streamlit_app.py:7:import streamlit as st
+app/streamlit_app.py:8:from PIL import Image
+app/streamlit_app.py:14:from src.core.pipeline import AnalysisPipeline
+app/streamlit_app.py:15:from src.camera import (
+app/streamlit_app.py:19:from src.learning import ExperienceMemory, FrameCache
+app/streamlit_app.py:20:from src.arqtech import ModelRegistry, describe_architecture, train_arqtech_v01
+app/streamlit_app.py:21:from src.ml import DatasetBuilder, rank_for_review, LearningReportGenerator, TrainingConfig, save_training_config, inspect_manifest
+app/streamlit_app.py:22:from src.input import InputManager, InputDescriptor, SourceType, SmartCapturePolicy, mask_url
+app/streamlit_app.py:23:from src.vision.video_analysis import VideoAnalyzer
+app/streamlit_app.py:24:from src.vision.perception_config import (
+tests/test_arqtech.py:1:from __future__ import annotations
+tests/test_arqtech.py:2:import sys, tempfile
+tests/test_arqtech.py:3:from pathlib import Path
+tests/test_arqtech.py:4:import numpy as np
+tests/test_arqtech.py:6:from src.arqtech import ModelRegistry, ExperimentLog, describe_architecture
+tests/test_arqtech.py:7:from src.arqtech.detector_interface import ClassicalBackend, ArqtechBackend, select_backend
+tests/test_arqtech.py:8:from src.arqtech.registry import ModelStatus
+tests/test_camera_learning_geometry.py:1:from __future__ import annotations
+tests/test_camera_learning_geometry.py:2:import sys, tempfile
+tests/test_camera_learning_geometry.py:3:from pathlib import Path
+tests/test_camera_learning_geometry.py:4:import numpy as np
+tests/test_camera_learning_geometry.py:6:from src.camera import VideoFileSource, SmartphoneCameraSource
+tests/test_camera_learning_geometry.py:7:from src.vision.geometry import GeometryEngine
+tests/test_camera_learning_geometry.py:8:from src.vision.detector import Detection
+tests/test_camera_learning_geometry.py:9:from src.learning import ExperienceMemory, FrameCache
+tests/test_camera_learning_geometry.py:10:from src.core.pipeline import AnalysisPipeline
+tests/test_camera_occupancy.py:2:from __future__ import annotations
+tests/test_camera_occupancy.py:3:import sys
+tests/test_camera_occupancy.py:4:from pathlib import Path
+tests/test_camera_occupancy.py:5:import numpy as np
+tests/test_camera_occupancy.py:8:from src.camera.webcam import WebcamSource
+tests/test_camera_occupancy.py:9:from src.camera.ip_camera import IPCameraSource
+tests/test_camera_occupancy.py:10:from src.vision.preprocessing import Preprocessor
+tests/test_camera_occupancy.py:11:from src.vision.tracker import IoUTracker
+tests/test_camera_occupancy.py:12:from src.vision.detector import Detection
+tests/test_camera_occupancy.py:13:from src.planning.occupancy import build_occupancy_from_mask, build_cost_map
+tests/test_camera_occupancy.py:14:from src.core.pipeline import AnalysisPipeline
+tests/test_experience_learning.py:1:from __future__ import annotations
+tests/test_experience_learning.py:2:import sys, tempfile
+tests/test_experience_learning.py:3:from pathlib import Path
+tests/test_experience_learning.py:4:import numpy as np
+tests/test_experience_learning.py:6:from src.learning import ExperienceMemory
+tests/test_experience_learning.py:7:from src.ml.dataset_builder import DatasetBuilder
+tests/test_experience_learning.py:8:from src.ml.dataset_inspect import inspect_manifest
+tests/test_experience_learning.py:9:from src.input.smart_capture import SmartCapturePolicy, SmartCaptureState, should_capture
+tests/test_input_layer.py:1:from __future__ import annotations
+tests/test_input_layer.py:2:import sys
+tests/test_input_layer.py:3:from pathlib import Path
+tests/test_input_layer.py:4:import numpy as np
+tests/test_input_layer.py:6:from src.input import StreamResolver, InputDescriptor, SourceType, FrameBuffer, mask_url, SmartCapturePolicy, should_capture
+tests/test_input_layer.py:7:from src.input.smart_capture import SmartCaptureState
+tests/test_input_layer.py:8:from src.camera.base import FramePacket
+tests/test_ml_pipeline.py:1:from __future__ import annotations
+tests/test_ml_pipeline.py:2:import sys, tempfile, json
+tests/test_ml_pipeline.py:3:from pathlib import Path
+tests/test_ml_pipeline.py:4:import numpy as np
+tests/test_ml_pipeline.py:5:import cv2
+tests/test_ml_pipeline.py:7:from src.ml.dataset_builder import DatasetBuilder
+tests/test_ml_pipeline.py:8:from src.ml.active_learning import rank_for_review
+tests/test_ml_pipeline.py:9:from src.ml.report import LearningReportGenerator
+tests/test_ml_pipeline.py:10:from src.ml.training_config import TrainingConfig, save_training_config
+tests/test_perception_upgrade.py:1:from __future__ import annotations
+tests/test_perception_upgrade.py:2:import sys
+tests/test_perception_upgrade.py:3:from pathlib import Path
+tests/test_perception_upgrade.py:4:import numpy as np
+tests/test_perception_upgrade.py:6:from src.vision.detector import Detection
+tests/test_perception_upgrade.py:7:from src.vision.nms import nms_detections
+tests/test_perception_upgrade.py:8:from src.vision.tracker import IoUTracker, STATUS_CONFIRMED
+tests/test_perception_upgrade.py:9:from src.planning.obstacle_fusion import fuse_obstacles, fusion_stats
+tests/test_perception_upgrade.py:10:from src.robotics.navigation_state import NavigationController, PATH_BLOCKED, NO_VALID_PATH
+tests/test_perception_upgrade.py:11:from src.core.pipeline import AnalysisPipeline
+tests/test_pipeline.py:2:from __future__ import annotations
+tests/test_pipeline.py:3:import sys
+tests/test_pipeline.py:4:from pathlib import Path
+tests/test_pipeline.py:5:import numpy as np
+tests/test_pipeline.py:8:from src.vision.detector import ClassicalDetector
+tests/test_pipeline.py:9:from src.vision.geometry import box_iou
+tests/test_pipeline.py:10:from src.vision.scene import SceneAnalyzer
+tests/test_pipeline.py:11:from src.brain.risk_engine import RiskEngine
+tests/test_pipeline.py:12:from src.brain.decision_engine import DecisionEngine
+tests/test_pipeline.py:13:from src.planning.image_planner import ImageSpacePlanner
+tests/test_pipeline.py:14:from src.core.pipeline import AnalysisPipeline
+tests/test_scene_robotics.py:1:from __future__ import annotations
+tests/test_scene_robotics.py:2:import sys
+tests/test_scene_robotics.py:3:from pathlib import Path
+tests/test_scene_robotics.py:4:import numpy as np
+tests/test_scene_robotics.py:6:from src.vision.navigation_relevance import navigation_relevance
+tests/test_scene_robotics.py:7:from src.vision.scene_narrative import build_narrative, scene_inventory
+tests/test_scene_robotics.py:8:from src.robotics.navigation_state import derive_navigation_state
+tests/test_scene_robotics.py:9:from src.core.pipeline import AnalysisPipeline
+tests/test_uncertainty_tracker.py:2:from __future__ import annotations
+tests/test_uncertainty_tracker.py:3:import sys
+tests/test_uncertainty_tracker.py:4:from pathlib import Path
+tests/test_uncertainty_tracker.py:5:import numpy as np
+tests/test_uncertainty_tracker.py:8:from src.brain.uncertainty import UncertaintyEngine
+tests/test_uncertainty_tracker.py:9:from src.vision.detector import Detection
+tests/test_uncertainty_tracker.py:10:from src.vision.tracker import IoUTracker
+tests/test_uncertainty_tracker.py:11:from src.planning.occupancy import build_occupancy_from_mask, build_cost_map
+tests/test_uncertainty_tracker.py:12:from src.core.pipeline import AnalysisPipeline
+tests/test_video_analysis.py:1:from __future__ import annotations
+tests/test_video_analysis.py:2:import sys, tempfile, time
+tests/test_video_analysis.py:3:from pathlib import Path
+tests/test_video_analysis.py:4:import numpy as np
+tests/test_video_analysis.py:5:import cv2
+tests/test_video_analysis.py:7:from src.camera.video_file import VideoFileSource
+tests/test_video_analysis.py:8:from src.vision.video_analysis import VideoAnalyzer
+tests/test_video_metadata.py:1:from __future__ import annotations
+tests/test_video_metadata.py:2:import sys, tempfile
+tests/test_video_metadata.py:3:from pathlib import Path
+tests/test_video_metadata.py:4:import numpy as np
+tests/test_video_metadata.py:5:import cv2
+tests/test_video_metadata.py:7:from src.camera.video_file import VideoFileSource
+tests/test_video_metadata.py:8:from src.camera.video_metadata import obtain_video_metadata, empty_metadata
+tests/test_yolo_baseline_tracking.py:1:import sys
+tests/test_yolo_baseline_tracking.py:2:import types
+tests/test_yolo_baseline_tracking.py:3:from pathlib import Path
+tests/test_yolo_baseline_tracking.py:5:import numpy as np
+tests/test_yolo_baseline_tracking.py:9:from src.core.pipeline import AnalysisPipeline
+tests/test_yolo_baseline_tracking.py:10:from src.vision.detector import Detection
+tests/test_yolo_baseline_tracking.py:11:from src.vision.perception_config import PERCEPTION_YOLO_BASELINE
+tests/test_yolo_baseline_tracking.py:12:from src.vision.temporal_smoothing import TemporalSmoother
+tests/test_yolo_baseline_tracking.py:13:from src.vision.tracker import IoUTracker, STATUS_CONFIRMED
+tests/test_yolo_baseline_tracking.py:14:from src.vision.yolo_adapter import YoloDetector
+tests/test_groq_integration.py:1:import sys
+tests/test_groq_integration.py:2:from pathlib import Path
+tests/test_groq_integration.py:4:import numpy as np
+tests/test_groq_integration.py:8:from src.integrations.groq_client import GroqClient, GroqConfig

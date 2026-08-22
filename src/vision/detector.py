@@ -26,6 +26,12 @@ class Detection:
     frame_id: Optional[int] = None
     source_models: Tuple[str, ...] = field(default_factory=tuple)
     agreement_count: int = 1
+    mask: Optional[np.ndarray] = field(default=None, repr=False, compare=False)
+    mask_bbox: Optional[Tuple[int, int, int, int]] = None
+    mask_area_px2: Optional[float] = None
+    mask_perimeter_px: Optional[float] = None
+    segmentation_model: Optional[str] = None
+    segmentation_status: str = "NOT AVAILABLE"
 
     @property
     def width(self) -> int:
@@ -70,6 +76,12 @@ class Detection:
             "frame_id": self.frame_id,
             "source_models": tuple(self.source_models or (self.source_model,)),
             "agreement_count": int(self.agreement_count),
+            "mask_available": self.mask is not None,
+            "mask_bbox": self.mask_bbox,
+            "mask_area_px2": round(float(self.mask_area_px2), 2) if self.mask_area_px2 is not None else None,
+            "mask_perimeter_px": round(float(self.mask_perimeter_px), 2) if self.mask_perimeter_px is not None else None,
+            "segmentation_model": self.segmentation_model,
+            "segmentation_status": self.segmentation_status,
         }
 
 

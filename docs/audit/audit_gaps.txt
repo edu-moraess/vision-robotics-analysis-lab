@@ -1,0 +1,123 @@
+=== REQUIRED DOMAINS ===
+segmentation   0
+motion         0
+trajectory     0
+occupancy      0
+risk           0
+navigation     0
+simulation     0
+storage        0
+reports        0
+=== TOP-LEVEL MODULES ===
+src/__init__.py
+src/arqtech/__init__.py
+src/arqtech/architecture.py
+src/arqtech/detector_interface.py
+src/arqtech/experiment_log.py
+src/arqtech/model_v01.py
+src/arqtech/registry.py
+src/arqtech/status.py
+src/arqtech/synthetic_data.py
+src/arqtech/train.py
+src/brain/__init__.py
+src/brain/decision_engine.py
+src/brain/risk_engine.py
+src/brain/uncertainty.py
+src/camera/__init__.py
+src/camera/base.py
+src/camera/ip_camera.py
+src/camera/smartphone.py
+src/camera/video_file.py
+src/camera/video_metadata.py
+src/camera/webcam.py
+src/core/__init__.py
+src/core/pipeline.py
+src/core/timing.py
+src/input/__init__.py
+src/input/frame_buffer.py
+src/input/manager.py
+src/input/resolver.py
+src/input/security.py
+src/input/smart_capture.py
+src/input/types.py
+src/integrations/__init__.py
+src/integrations/groq_client.py
+src/integrations/secrets.py
+src/learning/__init__.py
+src/learning/experience.py
+src/learning/frame_cache.py
+src/ml/__init__.py
+src/ml/active_learning.py
+src/ml/dataset_builder.py
+src/ml/dataset_inspect.py
+src/ml/report.py
+src/ml/training_config.py
+src/planning/__init__.py
+src/planning/image_planner.py
+src/planning/obstacle_fusion.py
+src/planning/occupancy.py
+src/robotics/__init__.py
+src/robotics/navigation_state.py
+src/robotics/world_model.py
+src/vision/__init__.py
+src/vision/annotator.py
+src/vision/calibration.py
+src/vision/detector.py
+src/vision/geometry.py
+src/vision/navigation_relevance.py
+src/vision/nms.py
+src/vision/orchestrator.py
+src/vision/perception_config.py
+src/vision/preprocessing.py
+src/vision/scene.py
+src/vision/scene_narrative.py
+src/vision/temporal_smoothing.py
+src/vision/tracker.py
+src/vision/video_analysis.py
+src/vision/yolo_adapter.py
+=== REFERENCED PUBLIC CLASSES ===
+src/core/pipeline.py:32:from ..planning.occupancy import build_occupancy_from_mask, build_cost_map, OccupancyGrid
+src/core/pipeline.py:35:from ..robotics.world_model import WorldModel
+src/core/pipeline.py:59:    occupancy: Optional[OccupancyGrid] = None
+src/core/pipeline.py:416:        wm = WorldModel.from_enriched(enriched, scene.estimated_free_space_ratio, path_ok)
+src/learning/experience.py:1:"""Experience Memory — selective storage. Predictions are NOT ground truth."""
+src/ml/report.py:74:                "Predictions are not ground truth until human review and annotation.",
+src/planning/occupancy.py:10:class OccupancyGrid:
+src/planning/occupancy.py:23:def build_occupancy_from_mask(free_space_mask, cell_size=16, free_threshold=0.45) -> OccupancyGrid:
+src/planning/occupancy.py:34:    return OccupancyGrid(grid=grid, cell_size=cell_size, image_shape=(h, w))
+src/planning/occupancy.py:36:def build_cost_map(occupancy: OccupancyGrid, inflation=1, obstacle_cost=1000.0, proximity_weight=5.0):
+src/robotics/__init__.py:8:from .world_model import WorldModel
+src/robotics/__init__.py:19:    "WorldModel",
+src/robotics/world_model.py:19:class WorldModel:
+src/robotics/world_model.py:40:        return WorldModel(frame_id=frame_id, objects=objs, free_space_ratio=free_space_ratio,
+=== ROOT AND DOCS ===
+./.gitignore
+./.pytest_cache/.gitignore
+./.pytest_cache/CACHEDIR.TAG
+./.pytest_cache/README.md
+./LICENSE
+./README.md
+./app/streamlit_app.py
+./config/default.yaml
+./docs/arqtech.md
+./docs/audit_gaps.txt
+./docs/full_audit_raw.txt
+./docs/groq_api_notes.md
+./docs/master_audit.md
+./requirements-yolo.txt
+./requirements.txt
+./src/__init__.py
+./tests/test_arqtech.py
+./tests/test_camera_learning_geometry.py
+./tests/test_camera_occupancy.py
+./tests/test_experience_learning.py
+./tests/test_groq_integration.py
+./tests/test_input_layer.py
+./tests/test_ml_pipeline.py
+./tests/test_perception_upgrade.py
+./tests/test_pipeline.py
+./tests/test_scene_robotics.py
+./tests/test_uncertainty_tracker.py
+./tests/test_video_analysis.py
+./tests/test_video_metadata.py
+./tests/test_yolo_baseline_tracking.py

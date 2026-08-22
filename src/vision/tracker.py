@@ -36,6 +36,10 @@ class Track:
     source_model: str = "CURRENT DETECTOR"
     model_version: str = "baseline"
     class_id: Optional[int] = None
+    motion_state: str = "UNKNOWN"
+    motion: dict = field(default_factory=dict)
+    trajectory: List[dict] = field(default_factory=list)
+    predicted_trajectory: List[dict] = field(default_factory=list)
 
     def to_dict(self):
         raw = self.raw_center or self.center
@@ -64,6 +68,10 @@ class Track:
             "source_model": self.source_model,
             "model_version": self.model_version,
             "position_history": list(self.position_history[-20:]),
+            "motion_state": self.motion_state,
+            "motion": dict(self.motion),
+            "trajectory": list(self.trajectory[-20:]),
+            "predicted_trajectory": list(self.predicted_trajectory),
         }
 
 

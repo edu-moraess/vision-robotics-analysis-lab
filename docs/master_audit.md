@@ -38,3 +38,34 @@ Metric depth, camera calibration, real-world velocity, km/h, SLAM, EKF, ROS 2 an
 ## Remaining engineering steps
 
 The next substantive engineering step is to collect human-reviewed bounding-box annotations in versioned datasets, implement a reviewed ARQTECH detection target and postprocessor, and run a documented benchmark against the current detector and YOLO on a held-out evaluation set. Those steps are intentionally not fabricated by this implementation.
+
+
+## Post-expansion audit — 2026-08-22
+
+### New implemented capabilities
+
+| Area | Status | Evidence and limits |
+|---|---|---|
+| Segmentation | IMPLEMENTED / ESTIMATED | `src/segmentation/ContourSegmenter` produces bbox-local contour masks and pixel geometry. It is not semantic neural segmentation or ground truth. |
+| Temporal state | IMPLEMENTED | Track histories, motion states, debounced `MOTION_STATE_CHANGED` events and per-track provenance are available. |
+| Motion | IMPLEMENTED / IMAGE-SPACE | Position, displacement, direction, velocity estimate and acceleration estimate are deterministic image-space outputs. |
+| Trajectory | IMPLEMENTED / IMAGE-SPACE | `TrajectoryEngine` stores timestamped samples and produces an image-projection heatmap. |
+| Prediction | IMPLEMENTED / BASELINE | Constant-velocity predicted points are deterministic; no learned AI predictor or physical collision probability is claimed. |
+| Semantic occupancy | IMPLEMENTED / PROJECTED | Detection, contour mask and tracks are combined into semantic image-space cells. It is not a 3D map. |
+| Risk zones | IMPLEMENTED / DETERMINISTIC | Contextual object/global risk uses class prior, image position, confidence, motion and path context. A person is not automatically critical. |
+| Cost map | IMPLEMENTED / IMAGE-SPACE | Occupancy, risk zones and predicted trajectory points contribute to a non-metric planning cost grid. |
+| WorldModel | IMPLEMENTED / INTERFACE | Carries objects, occupancy, trajectories, risk zones, paths and simulation state between perception and navigation. |
+| Path planner | IMPLEMENTED / IMAGE-SPACE | A* and Dijkstra remain available and can consume the combined cost map; no physical navigation is asserted. |
+| Robot simulation | IMPLEMENTED / SIMULATION ONLY | `RobotSimulation` renders a pixel-space robot, target, paths and state; it emits no physical control commands. |
+| Experience Memory | IMPLEMENTED / ENRICHED | Masks, geometry, motion, trajectories, risk, occupancy and simulation provenance are persisted separately from human annotation. |
+| Video reports | IMPLEMENTED / OBSERVATIONAL | Reports now aggregate segmentation masks, motion events, trajectories, predicted points, risk events and simulation steps. |
+
+### Second-scan findings
+
+The full suite passed with **96 tests**. Python compilation, `git diff --check` and a headless Streamlit smoke test completed successfully. The runtime secret scan found no credential pattern in `src`, `app`, `config` or `README`; the only `gsk-test-secret` occurrence is an intentionally fake offline test fixture and is excluded from runtime code.
+
+The repository keeps explicit `NOT AVAILABLE`, `NOT TRAINED`, `EXPERIMENTAL` and `PLANNED` states where capabilities require real calibration, reviewed detection labels, trained weights or physical hardware. The historical raw audit logs are stored under `docs/audit/`; they are evidence artifacts and are not runtime modules.
+
+### Remaining limitations
+
+No metric depth, real-world distance, km/h velocity, 3D reconstruction, LiDAR, radar, SLAM, ROS control or production ARQTECH object detector was introduced. The current segmentation provider is contour-based, the motion predictor is constant velocity, occupancy is projected to image-space, and robot simulation is not physical control. A real regression video was not available in the repository for an before/after benchmark; therefore no mAP, precision, recall, FPS improvement or detector superiority is claimed.

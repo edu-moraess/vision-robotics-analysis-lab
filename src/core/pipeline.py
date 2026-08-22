@@ -35,6 +35,11 @@ from ..vision.scene_narrative import build_narrative, scene_inventory
 from ..robotics.world_model import WorldModel
 from ..robotics.navigation_state import NavigationController
 from ..integrations import GroqClient
+from ..segmentation import ContourSegmenter
+from ..motion import MotionEngine
+from ..planning.semantic_occupancy import build_semantic_occupancy
+from ..planning.cost_map import build_navigation_cost_map
+from ..simulation import RobotSimulation
 try:
     from ..arqtech.inference import ArqtechDetector
 except Exception:
@@ -53,6 +58,7 @@ class AnalysisResult:
     annotated_image: np.ndarray
     free_space_overlay: np.ndarray
     path_overlay: np.ndarray
+    simulation_overlay: Optional[np.ndarray]
     processing_time_ms: float
     image_shape: Tuple[int, int]
     preprocess: Optional[PreprocessResult] = None
@@ -84,6 +90,13 @@ class AnalysisResult:
     perception_evidence: List[dict] = field(default_factory=list)
     perception_fusion: dict = field(default_factory=dict)
     groq_analysis: dict = field(default_factory=dict)
+    segmentation_report: dict = field(default_factory=dict)
+    motion_observations: List[dict] = field(default_factory=list)
+    motion_events: List[dict] = field(default_factory=list)
+    trajectory_heatmap: dict = field(default_factory=dict)
+    semantic_occupancy: dict = field(default_factory=dict)
+    navigation_cost_map: dict = field(default_factory=dict)
+    simulation_state: dict = field(default_factory=dict)
 
     def metrics(self) -> Dict[str, Any]:
         avg_conf = float(np.mean([d.confidence for d in self.detections])) if self.detections else 0.0
@@ -113,6 +126,13 @@ class AnalysisResult:
             "perception_evidence": len(self.perception_evidence),
             "perception_fusion": self.perception_fusion,
             "groq": self.groq_analysis,
+            "segmentation": self.segmentation_report,
+            "motion_observations": len(self.motion_observations),
+            "motion_events": len(self.motion_events),
+            "trajectory_heatmap": {k: v for k, v in self.trajectory_heatmap.items() if k != "array"},
+            "semantic_occupancy": self.semantic_occupancy,
+            "navigation_cost_map": self.navigation_cost_map,
+            "simulation": self.simulation_state,
         }
         if self.uncertainty is not None:
             out["uncertainty_overall"] = round(self.uncertainty.overall, 3)
@@ -134,7 +154,7 @@ class AnalysisPipeline:
                  smoothing_enabled=False, smoothing_method="RAW",
                  smoothing_window=5, smoothing_alpha=0.35, class_mapping=None,
                  calibration_status="NOT CALIBRATED", enable_groq=False, groq_client=None,
-                 arqtech_checkpoint=None):
+                 arqtech_checkpoint=None, enable_segmentation=True, segmenter=None):
         mapping = dict(DEFAULT_CLASS_MAPPING) if class_mapping is None else dict(class_mapping)
         self.config = PerceptionConfig(
             mode=perception_mode,
@@ -231,11 +251,17 @@ class AnalysisPipeline:
         self.last_dropped_frames = 0
         self.groq_client = groq_client if groq_client is not None else (GroqClient() if enable_groq else None)
         self.groq_enabled = bool(enable_groq)
+        self.segmenter = segmenter if segmenter is not None else (ContourSegmenter() if enable_segmentation else None)
+        self.segmentation_enabled = self.segmenter is not None
+        self.motion_engine = MotionEngine()
+        self.simulation = RobotSimulation()
 
     def reset_tracker(self):
         if self.tracker is not None:
             self.tracker.reset()
         self.smoother.reset()
+        self.motion_engine.reset()
+        self.simulation.reset()
         self.nav_controller.reset()
 
     def _detect(self, work, timestamp, frame_id, notes):
@@ -334,6 +360,22 @@ class AnalysisPipeline:
             detections = nms_detections(raw_detections, iou_threshold=self.config.iou_threshold)
             if len(raw_detections) != len(detections):
                 notes.append(f"NMS: {len(raw_detections)} → {len(detections)} detections.")
+        segmentation_report = {"status": "DISABLED", "mask_count": 0, "method": "NONE"}
+        with measure("segmentation", lat):
+            if self.segmenter is not None:
+                try:
+                    segmentation = self.segmenter.segment(work, detections, timestamp=timestamp, frame_id=frame_id)
+                    detections = list(segmentation.detections)
+                    segmentation_report = segmentation.to_dict()
+                except Exception as exc:
+                    notes.append(f"Segmentation unavailable: {type(exc).__name__}")
+                    segmentation_report = {
+                        "status": "FAILED", "mask_count": 0,
+                        "method": getattr(self.segmenter, "model_name", "UNKNOWN"),
+                        "notes": ["Original bbox detections preserved."],
+                    }
+            else:
+                notes.append("Segmentation disabled; bbox-only geometry remains active.")
         tracks = []
         tracking_active = False
         track_events = []
@@ -345,6 +387,14 @@ class AnalysisPipeline:
                 track_events = list(getattr(self.tracker, "events", []) or [])
             else:
                 notes.append("Tracking disabled (static image mode).")
+        motion_observations = []
+        motion_events = []
+        trajectory_heatmap = {"status": "EMPTY", "sample_count": 0, "track_count": 0, "unit": "IMAGE-SPACE PROJECTION", "physical_map": False}
+        with measure("motion", lat):
+            if tracks:
+                motion_observations_raw, motion_events = self.motion_engine.update(tracks, timestamp=timestamp)
+                motion_observations = [observation.to_dict() for observation in motion_observations_raw]
+                trajectory_heatmap = self.motion_engine.heatmap((h, w))
         fused = fuse_obstacles(
             detections,
             tracks=tracks if tracks else None,
@@ -357,19 +407,46 @@ class AnalysisPipeline:
         avg_conf = float(np.mean([d.confidence for d in detections])) if detections else 0.5
         occupancy = None
         cost_map = None
+        semantic_occupancy = None
+        navigation_cost_map = None
         with measure("occupancy", lat):
             if scene.free_space_mask is not None:
                 occupancy = build_occupancy_from_mask(scene.free_space_mask, cell_size=self.cell_size)
-                cost_map = build_cost_map(occupancy, inflation=1)
+                semantic_occupancy = build_semantic_occupancy(
+                    (h, w), free_space_mask=scene.free_space_mask,
+                    detections=detections, tracks=tracks, cell_size=self.cell_size,
+                )
         with measure("risk", lat):
-            risk = self.risk_engine.assess(scene, path_available=True, avg_confidence=avg_conf)
+            risk = self.risk_engine.assess(
+                scene, path_available=True, avg_confidence=avg_conf,
+                detections=detections, motion_observations=motion_observations,
+                image_shape=(h, w),
+            )
+            if occupancy is not None:
+                navigation_cost_map = build_navigation_cost_map(
+                    occupancy, risk_assessment=risk,
+                    predicted_trajectories=motion_observations,
+                )
+                cost_map = navigation_cost_map.grid
         plan = None
         comparison = []
         with measure("planning", lat):
             if run_planner and scene.free_space_mask is not None:
-                comparison = self.planner.compare(scene.free_space_mask)
+                comparison = self.planner.compare(
+                    scene.free_space_mask, cost_map=cost_map,
+                )
                 plan = next((p for p in comparison if p.algorithm == "astar"), comparison[0] if comparison else None)
-                risk = self.risk_engine.assess(scene, path_available=plan.success if plan else False, avg_confidence=avg_conf)
+                risk = self.risk_engine.assess(
+                    scene, path_available=plan.success if plan else False,
+                    avg_confidence=avg_conf, detections=detections,
+                    motion_observations=motion_observations, image_shape=(h, w),
+                )
+                if occupancy is not None:
+                    navigation_cost_map = build_navigation_cost_map(
+                        occupancy, risk_assessment=risk,
+                        predicted_trajectories=motion_observations,
+                    )
+                    cost_map = navigation_cost_map.grid
         with measure("decision", lat):
             decision = self.brain.decide(
                 scene.estimated_free_space_ratio,
@@ -410,10 +487,19 @@ class AnalysisPipeline:
                 path_img = draw_path(path_img, plan.path_px)
         elapsed = (time.perf_counter() - t0) * 1000.0
         enriched = enrich_detections(detections, w, h, class_mapping=self.config.class_mapping)
+        geometry_by_id = {int(g.detection_id): g.to_dict() for g in geometries if g.detection_id is not None}
+        motion_by_id = {int(m.get("track_id")): m for m in motion_observations if m.get("track_id") is not None}
+        risk_by_id = {int(r.get("object_id")): r for r in risk.object_risks if r.get("object_id") is not None}
+        for row, detection in zip(enriched, detections):
+            object_id = detection.object_id
+            row["geometry"] = geometry_by_id.get(int(object_id), {}) if object_id is not None else {}
+            row["motion"] = motion_by_id.get(int(object_id), {}) if object_id is not None else {}
+            row["risk"] = risk_by_id.get(int(object_id), {}) if object_id is not None else {}
+            row["mask_available"] = detection.mask is not None
         path_ok = bool(plan and plan.success)
         narrative = build_narrative(detections, scene.estimated_free_space_ratio, path_ok, decision.action, risk.level, enriched)
         inv = scene_inventory(detections)
-        wm = WorldModel.from_enriched(enriched, scene.estimated_free_space_ratio, path_ok)
+        alternative = next((p for p in comparison if plan is not None and p.algorithm != plan.algorithm), None)
         nav_dict = self.nav_controller.update(
             has_path=path_ok,
             free_space_ratio=float(scene.estimated_free_space_ratio),
@@ -423,6 +509,23 @@ class AnalysisPipeline:
             nodes=int(getattr(plan, "nodes_explored", 0) or 0) if plan else 0,
         )
         planner_diag = nav_dict.get("diagnostics")
+        simulation_state = self.simulation.update(
+            (h, w),
+            current_path=plan.path_px if plan is not None else [],
+            alternative_path=alternative.path_px if alternative is not None else [],
+            navigation_state=nav_dict.get("status"),
+            obstacles=fused,
+            risk_zones=risk.risk_zones,
+        )
+        simulation_overlay = self.simulation.render(path_img, simulation_state)
+        wm = WorldModel.from_enriched(
+            enriched, scene.estimated_free_space_ratio, path_ok,
+            frame_id=frame_id or 0,
+            semantic_occupancy=semantic_occupancy.to_dict() if semantic_occupancy is not None else {},
+            trajectories=self.motion_engine.trajectories(), risk_zones=risk.risk_zones,
+            occupancy=occupancy, current_path=plan, alternative_path=alternative,
+            simulation=simulation_state.to_dict(),
+        )
         detection_ms = float(lat.stages.get("detection", 0.0))
         telemetry = {
             "source_fps": round(float(source_fps), 3) if source_fps is not None else "N/A",
@@ -430,6 +533,8 @@ class AnalysisPipeline:
             "pipeline_fps": round(1000.0 / elapsed, 3) if elapsed > 0 else "N/A",
             "inference_latency_ms": round(detection_ms, 3) if detection_ms > 0 else "N/A",
             "tracking_latency_ms": round(float(lat.stages.get("tracking", 0.0)), 3),
+            "segmentation_latency_ms": round(float(lat.stages.get("segmentation", 0.0)), 3),
+            "motion_latency_ms": round(float(lat.stages.get("motion", 0.0)), 3),
             "planning_latency_ms": round(float(lat.stages.get("planning", 0.0)), 3),
             "total_latency_ms": round(elapsed, 3),
             "dropped_frames": int(dropped_frames) if dropped_frames is not None else "N/A",
@@ -461,4 +566,12 @@ class AnalysisPipeline:
             perception_evidence=[e.to_dict() for e in self.last_orchestration.evidence],
             perception_fusion=dict(self.last_orchestration.fusion),
             groq_analysis=groq_analysis,
+            segmentation_report=segmentation_report,
+            motion_observations=motion_observations,
+            motion_events=motion_events,
+            trajectory_heatmap=trajectory_heatmap,
+            semantic_occupancy=semantic_occupancy.to_dict() if semantic_occupancy is not None else {},
+            navigation_cost_map=navigation_cost_map.to_dict() if navigation_cost_map is not None else {},
+            simulation_state=simulation_state.to_dict(),
+            simulation_overlay=simulation_overlay,
         )

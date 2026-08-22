@@ -19,10 +19,10 @@
 
 | | BASELINE | ARQTECH |
 |--|----------|---------|
-| Type | OpenCV classical | Proprietary DL family (planned) |
-| Status | **ACTIVE** | **SCAFFOLD** |
-| Checkpoint | N/A | None |
-| Metrics | Latency only | None until trained |
+| Type | OpenCV classical | Modular PyTorch research family |
+| Status | **ACTIVE** | **EXPERIMENTAL** |
+| Checkpoint | N/A | Classification bootstrap only; no detection checkpoint |
+| Metrics | Latency only | Synthetic classification metrics only; no detection benchmark |
 
 ## Scientific principle
 

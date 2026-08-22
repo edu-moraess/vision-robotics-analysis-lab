@@ -73,6 +73,42 @@ scene:
   lower_roi_ratio: 0.45
   edge_threshold: 0.12
 
+segmentation:
+  enabled: true
+  method: CONTOUR_SEGMENTATION
+  status: ESTIMATED
+  semantic_model: NOT CONFIGURED
+
+motion:
+  enabled: true
+  unit: IMAGE-SPACE
+  static_speed_threshold_px_per_frame: 1.0
+  prediction_model: CONSTANT VELOCITY
+  prediction_status: DETERMINISTIC BASELINE
+  calibrated_metric_motion: false
+
+trajectory:
+  history_limit: 120
+  heatmap_unit: IMAGE-SPACE PROJECTION
+  physical_map: false
+
+occupancy:
+  cell_size: 16
+  labels: [FREE, OCCUPIED, UNKNOWN, PERSON, WALL, OBSTACLE, FURNITURE, VEHICLE]
+  semantic_projection: IMAGE-SPACE
+  map_3d: false
+
+cost_map:
+  obstacle_cost: 1000.0
+  trajectory_cost_band: HIGH
+  metric_cost: false
+
+simulation:
+  enabled: true
+  step_px: 8.0
+  status: SIMULATION ONLY
+  physical_control: false
+
 risk:
   low: 0.30
   medium: 0.55

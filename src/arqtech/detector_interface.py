@@ -33,7 +33,7 @@ class ClassicalBackend(DetectorBackend):
         return self._det.detect(frame)
 
 class ArqtechBackend(DetectorBackend):
-    def __init__(self, version="ARQTECH-v0.0-scaffold", registry=None):
+    def __init__(self, version="ARQTECH-v0.0-experimental", registry=None):
         self.version = version
         self.registry = registry or ModelRegistry()
         self._record = self.registry.get(version)
@@ -42,7 +42,7 @@ class ArqtechBackend(DetectorBackend):
         return self.version
     @property
     def model_type(self):
-        return self._record.get("model_type", "SCAFFOLD") if self._record else "SCAFFOLD"
+        return self._record.get("model_type", "EXPERIMENTAL") if self._record else "EXPERIMENTAL"
     def is_available(self):
         if not self._record or self._record.get("status") != "ACTIVE":
             return False
@@ -54,7 +54,7 @@ class ArqtechBackend(DetectorBackend):
 
 def select_backend(preference="classical") -> DetectorBackend:
     if preference.lower().startswith("arqtech"):
-        b = ArqtechBackend(version=preference if preference != "arqtech" else "ARQTECH-v0.0-scaffold")
+        b = ArqtechBackend(version=preference if preference != "arqtech" else "ARQTECH-v0.0-experimental")
         if b.is_available():
             return b
         return ClassicalBackend()

@@ -194,6 +194,26 @@ pytest tests/ -v
 
 The suite covers input contracts, frame-buffer telemetry, detector normalization, YOLO fallback, perception fusion, tracking, smoothing, ARQTECH model forward/training/lifecycle, Groq disabled/success paths, Experience Memory, human-corrected dataset targets, video processing and existing navigation behavior.
 
+## Segmentation
+
+The current segmentation implementation is `ContourSegmenter`, a deterministic OpenCV baseline that derives a local mask and contour from each detection bbox. It reports mask area and contour perimeter in pixels and is labeled `ESTIMATED`. It is not semantic neural segmentation and it is not ground truth. A future neural segmentation provider can implement the same interface without changing tracking or navigation contracts.
+
+## Motion, trajectory and prediction
+
+`MotionEngine` consumes confirmed temporal tracks and produces position, displacement, direction, acceleration, motion state and transition events. `TrajectoryEngine` stores timestamped per-track histories and produces a temporal heatmap marked `IMAGE-SPACE PROJECTION`. `ConstantVelocityPredictor` is a deterministic baseline; it is not an AI predictor and does not claim collision probability or physical motion.
+
+The supported states are `STATIC`, `MOVING`, `APPROACHING`, `RECEDING`, `CROSSING` and `UNKNOWN`. `APPROACHING` and `RECEDING` are image-axis proxies until a valid calibration exists.
+
+## Occupancy, risk and navigation
+
+The pipeline now exposes numeric occupancy, semantic occupancy, risk zones and a navigation cost map. Semantic occupancy combines free-space heuristics with detections, masks and tracks and is explicitly projected image-space occupancy, not a 3D map. Risk is contextual: class prior, image position, confidence, motion and path availability are combined; a person is not automatically critical. A* and Dijkstra remain image-space planners and can consume the combined cost map.
+
+`WorldModel` is the interface between perception and navigation. It carries objects, obstacles, free space, occupancy, trajectories, risk zones, current/alternative paths and simulation state while explicitly declaring that physical robot control is unavailable.
+
+## Robot simulation
+
+`RobotSimulation` is a deliberately bounded image/simulation-space kinematic visualization. It displays robot position, target, current path, alternative path, navigation state, obstacle count and risk-zone count. Its overlay is labeled `ROBOT SIMULATION`; it emits no actuator commands and must never be presented as a physical robot controller.
+
 ## Scientific limitations
 
 This is a monocular engineering laboratory. It does not provide metric depth, validated camera calibration, physical robot control, SLAM, ROS 2 integration or a production object-detection benchmark. Synthetic classification accuracy is scoped to its synthetic hold-out and must not be reported as detection mAP or real-world performance.

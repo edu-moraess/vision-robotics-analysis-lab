@@ -45,6 +45,14 @@ class VideoAnalysisReport:
     path_blocked_transitions: int = 0
     replanning_events: int = 0
     track_switches: int = 0
+    segmentation_masks: int = 0
+    motion_observations: int = 0
+    motion_events: int = 0
+    trajectory_samples: int = 0
+    predicted_points: int = 0
+    risk_events: int = 0
+    heatmap_status: str = "EMPTY"
+    simulation_steps: int = 0
 
     def to_dict(self):
         return asdict(self)
@@ -72,6 +80,14 @@ class VideoAnalyzer:
         planner_events = Counter()
         duplicate_detections = 0
         track_switches = 0
+        segmentation_masks = 0
+        motion_observations = 0
+        motion_events = 0
+        trajectory_samples = 0
+        predicted_points = 0
+        risk_events = 0
+        heatmap_status = "EMPTY"
+        simulation_steps = 0
 
         for res, fid, ts in zip(results, frame_ids, timestamps_s):
             cur = set()
@@ -111,6 +127,14 @@ class VideoAnalyzer:
             if res.fusion_stats:
                 duplicate_detections += int(res.fusion_stats.get("duplicate_reduction", 0) or 0)
             track_switches += int((res.telemetry or {}).get("track_switches", 0) or 0)
+            segmentation_masks += int((res.segmentation_report or {}).get("mask_count", 0) or 0)
+            motion_observations += len(res.motion_observations or [])
+            motion_events += len(res.motion_events or [])
+            trajectory_samples += int((res.trajectory_heatmap or {}).get("sample_count", 0) or 0)
+            predicted_points += sum(len(m.get("predicted_trajectory", []) or []) for m in (res.motion_observations or []))
+            risk_events += sum(1 for r in ((res.risk.to_dict().get("object_risks", []) if res.risk else [])) if r.get("level") in ("HIGH", "CRITICAL"))
+            heatmap_status = (res.trajectory_heatmap or {}).get("status", heatmap_status)
+            simulation_steps += int((res.simulation_state or {}).get("step_index", 0) > 0)
             identity = res.model_identity or {}
             if identity and identity not in model_identities:
                 model_identities.append(identity)
@@ -138,6 +162,14 @@ class VideoAnalyzer:
             path_blocked_transitions=planner_events["PATH_BLOCKED"],
             replanning_events=planner_events["REPLANNING"],
             track_switches=track_switches,
+            segmentation_masks=segmentation_masks,
+            motion_observations=motion_observations,
+            motion_events=motion_events,
+            trajectory_samples=trajectory_samples,
+            predicted_points=predicted_points,
+            risk_events=risk_events,
+            heatmap_status=heatmap_status,
+            simulation_steps=simulation_steps,
             notes=[
                 "Same AnalysisPipeline as live camera.",
                 "Timestamps approx. from source FPS / frame index.",

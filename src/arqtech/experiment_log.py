@@ -29,7 +29,7 @@ class ExperimentLog:
         self.root.mkdir(parents=True, exist_ok=True)
         self.index_path = self.root / "experiments.jsonl"
 
-    def create(self, title, model_version="ARQTECH-v0.0-scaffold", architecture_notes="",
+    def create(self, title, model_version="ARQTECH-v0.0-experimental", architecture_notes="",
                dataset_version=None, hyperparameters=None, hardware=None, notes=None):
         rec = ExperimentRecord(
             experiment_id=f"exp_{uuid.uuid4().hex[:8]}", title=title,

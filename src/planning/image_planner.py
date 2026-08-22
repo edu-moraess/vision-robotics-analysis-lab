@@ -25,7 +25,7 @@ class ImagePlanResult:
 def _heuristic(a, b):
     return math.hypot(a[0]-b[0], a[1]-b[1])
 
-def _grid_search(occupancy, start, goal, use_heuristic=True):
+def _grid_search(occupancy, start, goal, use_heuristic=True, cost_grid=None, obstacle_cost=1000.0):
     rows, cols = occupancy.shape
     sx, sy = start; gx, gy = goal
     if not (0 <= sx < cols and 0 <= sy < rows and 0 <= gx < cols and 0 <= gy < rows):
@@ -52,7 +52,13 @@ def _grid_search(occupancy, start, goal, use_heuristic=True):
             nx, ny = cx+dx, cy+dy
             if not (0 <= nx < cols and 0 <= ny < rows) or occupancy[ny, nx] == 1:
                 continue
-            tg = g + cost
+            extra_cost = 0.0
+            if cost_grid is not None:
+                cell_cost = float(cost_grid[ny, nx])
+                if cell_cost >= obstacle_cost:
+                    continue
+                extra_cost = max(0.0, cell_cost - 1.0) * 0.01
+            tg = g + cost + extra_cost
             if tg < gscore.get((nx, ny), float("inf")):
                 gscore[(nx, ny)] = tg
                 came[(nx, ny)] = (cx, cy)
@@ -65,7 +71,7 @@ class ImageSpacePlanner:
         self.cell_size = max(4, cell_size)
         self.inflation = inflation
 
-    def plan(self, free_space_mask, algorithm="astar", start_px=None, goal_px=None):
+    def plan(self, free_space_mask, algorithm="astar", start_px=None, goal_px=None, cost_map=None):
         notes = ["Path computed in image-space (pixels).", "Not a metric navigation trajectory."]
         h, w = free_space_mask.shape[:2]
         grid_h, grid_w = max(1, h // self.cell_size), max(1, w // self.cell_size)
@@ -92,7 +98,15 @@ class ImageSpacePlanner:
         occupancy[start_g[1], start_g[0]] = 0
         occupancy[goal_g[1], goal_g[0]] = 0
         t0 = time.perf_counter()
-        path_g, nodes = _grid_search(occupancy, start_g, goal_g, algorithm.lower()=="astar")
+        grid_cost = None
+        if cost_map is not None:
+            grid_cost = np.asarray(cost_map)
+            if grid_cost.shape != occupancy.shape:
+                grid_cost = None
+        path_g, nodes = _grid_search(
+            occupancy, start_g, goal_g, algorithm.lower()=="astar",
+            cost_grid=grid_cost,
+        )
         elapsed = (time.perf_counter()-t0)*1000.0
         path_px = []
         for gx, gy in path_g:
@@ -100,6 +114,6 @@ class ImageSpacePlanner:
         length = sum(math.hypot(path_px[i][0]-path_px[i-1][0], path_px[i][1]-path_px[i-1][1]) for i in range(1, len(path_px)))
         return ImagePlanResult(algorithm.lower(), path_px, length, nodes, elapsed, len(path_px)>0, (grid_h, grid_w), notes)
 
-    def compare(self, free_space_mask, start_px=None, goal_px=None):
-        return [self.plan(free_space_mask, "astar", start_px, goal_px),
-                self.plan(free_space_mask, "dijkstra", start_px, goal_px)]
+    def compare(self, free_space_mask, start_px=None, goal_px=None, cost_map=None):
+        return [self.plan(free_space_mask, "astar", start_px, goal_px, cost_map=cost_map),
+                self.plan(free_space_mask, "dijkstra", start_px, goal_px, cost_map=cost_map)]

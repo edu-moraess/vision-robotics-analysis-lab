@@ -41,6 +41,8 @@ class ObjectGeometry:
     normalized_x: float
     normalized_y: float
     region: str
+    geometry_source: str = "BBOX"
+    mask_available: bool = False
 
     def to_dict(self):
         return {
@@ -51,6 +53,8 @@ class ObjectGeometry:
             "perimeter_px": round(self.perimeter_px, 1),
             "normalized_x": round(self.normalized_x, 3), "normalized_y": round(self.normalized_y, 3),
             "region": self.region, "unit": "pixel",
+            "geometry_source": self.geometry_source,
+            "mask_available": self.mask_available,
         }
 
 class GeometryEngine:
@@ -65,8 +69,13 @@ class GeometryEngine:
             bw = float(max(0, x2 - x1)); bh = float(max(0, y2 - y1))
             nx = d.center[0] / max(w, 1); ny = d.center[1] / max(h, 1)
             region = "left" if nx < 0.33 else ("right" if nx > 0.66 else "center")
+            mask_available = getattr(d, "mask", None) is not None
+            area_px2 = float(getattr(d, "mask_area_px2", None) or (bw * bh)) if mask_available else bw * bh
+            perimeter_px = float(getattr(d, "mask_perimeter_px", None) or (2.0 * (bw + bh))) if mask_available else 2.0 * (bw + bh)
             results.append(ObjectGeometry(
                 getattr(d, "object_id", None), d.class_name, d.bbox, d.center,
-                bw, bh, bw * bh, bw / max(bh, 1e-6), 2.0 * (bw + bh), float(nx), float(ny), region,
+                bw, bh, area_px2, bw / max(bh, 1e-6), perimeter_px, float(nx), float(ny), region,
+                geometry_source="MASK_CONTOUR" if mask_available else "BBOX",
+                mask_available=mask_available,
             ))
         return results

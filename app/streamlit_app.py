@@ -81,8 +81,15 @@ def result_provenance(result):
         "model_backend": identity.get("model_type", "UNKNOWN"),
         "tracks": [t.to_dict() for t in (result.tracks or [])],
         "navigation_state": result.navigation_state,
-        "events": list(result.track_events or []),
+        "events": list(result.track_events or []) + list(result.motion_events or []),
         "external_analysis": result.groq_analysis if (result.groq_analysis or {}).get("status") == "SUCCESS" else None,
+        "masks": [d.to_dict() for d in (result.detections or [])],
+        "geometry": [g.to_dict() for g in (result.geometries or [])],
+        "motion": list(result.motion_observations or []),
+        "trajectories": [t.to_dict() for t in (result.tracks or [])],
+        "risk": result.risk.to_dict() if result.risk is not None else None,
+        "occupancy": result.semantic_occupancy,
+        "simulation": result.simulation_state,
         "notes": list(result.notes or []),
     }
 
@@ -208,7 +215,7 @@ arq_status = describe_architecture().get("status", "NOT TRAINED")
 s4.markdown(f"**ARQTECH**  \n<span class='status-off'>○ {arq_status}</span>", unsafe_allow_html=True)
 s5.markdown("**LEARN**  \n<span class='status-off'>○ LOOP</span>", unsafe_allow_html=True)
 
-tabs = st.tabs(["MISSION CONTROL", "LIVE", "VIDEO INPUT", "RECORDED VIDEO", "PERCEPTION", "SCENE", "NAVIGATION", "BRAIN", "REVIEW", "DATASET", "TRAINING", "ARQTECH", "DIAGNOSTICS", "SYSTEM", "BASELINE COMPARISON", "GROQ"])
+tabs = st.tabs(["MISSION CONTROL", "LIVE", "VIDEO INPUT", "RECORDED VIDEO", "PERCEPTION", "SCENE", "NAVIGATION", "BRAIN", "REVIEW", "DATASET", "TRAINING", "ARQTECH", "DIAGNOSTICS", "SYSTEM", "BASELINE COMPARISON", "GROQ", "MOTION", "SIMULATION"])
 
 with tabs[0]:
     if original_bgr is None: st.info("Upload an image or start a camera.")
@@ -239,7 +246,7 @@ with tabs[1]:
     else:
         col_v, col_s = st.columns([2, 1])
         with col_v:
-            st.image(bgr_to_rgb(result.path_overlay if show_path else result.annotated_image), use_container_width=True)
+            st.image(bgr_to_rgb(result.simulation_overlay if show_path and result.simulation_overlay is not None else (result.path_overlay if show_path else result.annotated_image)), use_container_width=True)
         with col_s:
             nav = result.navigation_state or {}
             st.markdown(f"**NAV** `{nav.get('status', 'N/A')}`")
@@ -391,7 +398,7 @@ with tabs[3]:
                 st.session_state.video_src = None
                 st.session_state.video_path = None
             if st.session_state.result is not None and st.session_state.get("video_path") == str(tmp):
-                st.image(bgr_to_rgb(st.session_state.result.path_overlay if show_path else st.session_state.result.annotated_image), use_container_width=True)
+                st.image(bgr_to_rgb(st.session_state.result.simulation_overlay if show_path and st.session_state.result.simulation_overlay is not None else (st.session_state.result.path_overlay if show_path else st.session_state.result.annotated_image)), use_container_width=True)
                 for line in (st.session_state.result.narrative or [])[:6]:
                     st.write("• " + line)
             if st.session_state.get("video_report"):
@@ -414,7 +421,9 @@ with tabs[4]:
         if result.track_events:
             st.markdown("#### TEMPORAL EVENTS")
             st.dataframe(result.track_events, use_container_width=True)
-        st.caption("Positions and velocities are image-space. Real-world speed is disabled without valid camera calibration.")
+        st.markdown("#### SEGMENTATION")
+        st.json(result.segmentation_report)
+        st.caption("Positions, masks, perimeters and velocities are image-space. Real-world speed is disabled without valid camera calibration.")
 
 with tabs[5]:
     if result is None: st.info("No analysis.")
@@ -423,10 +432,23 @@ with tabs[5]:
         a,b,c,d = st.columns(4)
         a.metric("Objects", s.object_count); b.metric("Obstacles", s.obstacle_count)
         c.metric("Free space", f"{s.estimated_free_space_ratio*100:.1f}%"); d.metric("Density", f"{s.obstacle_density*100:.1f}%")
+        st.markdown("#### SEMANTIC OCCUPANCY")
+        st.json(result.semantic_occupancy)
+        st.markdown("#### RISK ZONES")
+        st.json(result.risk.to_dict().get("risk_zones", []))
+        heat = result.trajectory_heatmap.get("array") if result.trajectory_heatmap else None
+        if heat is not None and getattr(heat, "size", 0):
+            st.image(heat, caption="TRAJECTORY HEATMAP — IMAGE-SPACE PROJECTION", clamp=True, use_container_width=True)
 
 with tabs[6]:
     if result is None: st.info("No analysis.")
-    elif show_path: st.image(bgr_to_rgb(result.path_overlay), use_container_width=True)
+    elif show_path:
+        st.image(bgr_to_rgb(result.simulation_overlay if result.simulation_overlay is not None else result.path_overlay), use_container_width=True)
+        st.markdown("#### COST MAP")
+        st.json(result.navigation_cost_map)
+        st.markdown("#### NAVIGATION STATE")
+        st.json(result.navigation_state)
+
 
 with tabs[7]:
     if result is None: st.info("No analysis.")
@@ -505,20 +527,29 @@ with tabs[12]:
 
 with tabs[13]:
     import platform
+    import resource
     model_status = result.model_identity if result else {"model": perception_mode, "available": "N/A"}
+    memory_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
+    buffer_status = st.session_state.input_manager.buffer_stats()
     st.markdown(f"""
 | Component | Status |
 |-----------|--------|
 | Current Detector | AVAILABLE / FALLBACK |
 | YOLO Baseline | {model_status.get('available', 'NOT SELECTED')} |
 | Tracking | {('ACTIVE' if result and result.tracking_active else 'INACTIVE')} |
+| Segmentation | {(result.segmentation_report.get('status') if result else 'IDLE')} |
+| Motion / Trajectory | {(len(result.motion_observations) if result else 0)} observations |
 | Temporal Smoothing | {(result.smoothing.get('method') if result else smoothing_method)} |
 | Calibration | {(result.calibration_status if result else 'NOT CALIBRATED')} |
-| Recorded Video Lab | ACTIVE |
 | ARQTECH | {arq_status} — NOT YOLO |
 | Groq | {('ENABLED / ' + str((result.groq_analysis or {}).get('status', 'N/A')) if result and enable_groq else 'DISABLED')} |
+| CPU/GPU | {device} / CUDA availability is reported by runtime only |
+| Memory | {memory_mb:.1f} MB peak resident |
+| Frame Buffer | {buffer_status} |
 | Python | {platform.python_version()} |
 """)
+    if result:
+        st.json({"telemetry": result.telemetry, "simulation": result.simulation_state})
     st.caption("YOLO is used as an external baseline and is not ARQTECH. Distances and velocities remain image-space until calibration is valid.")
     st.caption("https://github.com/edu-moraess/vision-robotics-analysis-lab")
 
@@ -548,3 +579,28 @@ with tabs[15]:
         else:
             st.json(groq)
             st.caption("Groq output is advisory and is not automatically fused into obstacles, geometry, navigation or labels.")
+
+with tabs[16]:
+    st.markdown("### MOTION / TRAJECTORY")
+    st.caption("Deterministic image-space motion. Constant velocity is a baseline, not AI prediction.")
+    if result is None:
+        st.info("Analyze an image, camera frame or video frame first.")
+    else:
+        if result.motion_observations:
+            st.dataframe(result.motion_observations, use_container_width=True)
+        else:
+            st.info("No confirmed temporal tracks in this frame.")
+        st.json({k: v for k, v in result.trajectory_heatmap.items() if k != "array"})
+        heat = result.trajectory_heatmap.get("array") if result.trajectory_heatmap else None
+        if heat is not None and getattr(heat, "size", 0):
+            st.image(heat, caption="TRAJECTORY HEATMAP — NOT A PHYSICAL MAP", clamp=True, use_container_width=True)
+
+with tabs[17]:
+    st.markdown("### ROBOT SIMULATION")
+    st.caption("SIMULATION ONLY — no physical robot control, actuator output or metric dynamics.")
+    if result is None:
+        st.info("Analyze an image, camera frame or video frame first.")
+    else:
+        if result.simulation_overlay is not None:
+            st.image(bgr_to_rgb(result.simulation_overlay), caption="SIMULATION", use_container_width=True)
+        st.json(result.simulation_state)

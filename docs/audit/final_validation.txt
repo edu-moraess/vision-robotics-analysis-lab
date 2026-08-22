@@ -1,0 +1,42 @@
+=== TESTS ===
+........................................................................ [ 75%]
+.......................                                                  [100%]
+95 passed in 10.05s
+=== COMPILE ===
+=== DIFF CHECK ===
+=== SECRET SCAN (RUNTIME CODE) ===
+No runtime credential pattern found
+=== STALE SCAFFOLD REFERENCES ===
+docs/architecture_classification.md:43:| Old scaffold wording | DEPRECATE | Replace UI and docs labels such as `SCAFFOLD` when they understate the modular implementation, while retaining honest `EXPERIMENTAL` and `NOT TRAINED` states. |
+docs/audit/second_audit.txt:42:src/arqtech/detector_interface.py:45:        return self._record.get("model_type", "SCAFFOLD") if self._record else "SCAFFOLD"
+docs/audit/second_audit.txt:66:docs/arqtech.md:23:| Status | **ACTIVE** | **SCAFFOLD** |
+docs/audit/second_audit.txt:95:docs/architecture_classification.md:43:| Old scaffold wording | DEPRECATE | Replace UI and docs labels such as `SCAFFOLD` when they understate the modular implementation, while retaining honest `EXPERIMENTAL` and `NOT TRAINED` states. |
+docs/audit/second_audit.txt:100:docs/second_audit.txt:42:src/arqtech/detector_interface.py:45:        return self._record.get("model_type", "SCAFFOLD") if self._record else "SCAFFOLD"
+docs/audit/second_audit.txt:124:docs/second_audit.txt:66:docs/arqtech.md:23:| Status | **ACTIVE** | **SCAFFOLD** |
+=== STATUS ===
+ [31mM[m README.md
+ [31mM[m app/streamlit_app.py
+ [31mM[m docs/arqtech.md
+ [31mM[m src/arqtech/detector_interface.py
+ [31mM[m src/arqtech/experiment_log.py
+ [31mM[m src/brain/risk_engine.py
+ [31mM[m src/core/pipeline.py
+ [31mM[m src/learning/experience.py
+ [31mM[m src/planning/__init__.py
+ [31mM[m src/planning/image_planner.py
+ [31mM[m src/robotics/world_model.py
+ [31mM[m src/vision/detector.py
+ [31mM[m src/vision/geometry.py
+ [31mM[m src/vision/tracker.py
+ [31mM[m src/vision/video_analysis.py
+[31m??[m docs/architecture_classification.md
+[31m??[m docs/audit/
+[31m??[m src/motion/
+[31m??[m src/planning/cost_map.py
+[31m??[m src/planning/semantic_occupancy.py
+[31m??[m src/segmentation/
+[31m??[m src/simulation/
+[31m??[m tests/test_motion.py
+[31m??[m tests/test_segmentation.py
+[31m??[m tests/test_simulation.py
+[31m??[m tests/test_world_model_cost.py
