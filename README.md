@@ -188,9 +188,9 @@ The detection head is an architectural extension, not a claim that reviewed dete
 
 ## Deployment and dependencies
 
-`requirements.txt` is the deployable dependency list and includes the runtime packages used by the repository, the official `groq` SDK and `ultralytics` for the external YOLO baseline. `requirements-yolo.txt` remains as a compatibility extra for older deployment scripts. `pyproject.toml` contains package metadata, test configuration and the same dependency intent without secrets. `.gitignore` excludes local environment files, credentials and secret/config directories.
+`requirements.txt` is the deployable dependency list and includes the runtime packages used by the repository, the official `groq` SDK and `ultralytics` for the external YOLO baseline. It uses only the pinned `opencv-python==5.0.0.93`: `opencv-python` and `opencv-python-headless` both provide the `cv2` namespace and must not be installed together. `requirements-yolo.txt` remains as a compatibility extra for older deployment scripts. `pyproject.toml` contains package metadata, test configuration and the same dependency intent without secrets. `.gitignore` excludes local environment files, credentials and secret/config directories.
 
-The application can run without a Groq key and can fall back when Ultralytics, model weights or PyTorch are unavailable. No credential is committed. For Streamlit deployment, configure `GROQ_API_KEY` and optionally `GROQ_MODEL` through Streamlit Secrets only.
+The application can run without a Groq key and can fall back when Ultralytics, model weights or PyTorch are unavailable. For Streamlit Community Cloud, choose Python 3.12 or another runtime explicitly supported by the selected dependency wheels in the deployment settings, then reboot the app after changing dependency files. No credential is committed. For Streamlit deployment, configure `GROQ_API_KEY` and optionally `GROQ_MODEL` through Streamlit Secrets only.
 
 ## Groq health and safety
 

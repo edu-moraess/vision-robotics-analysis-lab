@@ -2,9 +2,14 @@
 from __future__ import annotations
 import io, sys, time, uuid, tempfile, re, json
 from pathlib import Path
-import cv2
-import numpy as np
 import streamlit as st
+try:
+    import cv2
+except Exception as exc:  # pragma: no cover - depends on deployment wheel state
+    st.error("OpenCV não pôde ser carregado neste ambiente.")
+    st.caption("Reinstale as dependências do app usando o opencv-python pinado e reinicie o deploy. Detalhe seguro: " + type(exc).__name__)
+    st.stop()
+import numpy as np
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent

@@ -84,3 +84,9 @@ No metric depth, real-world distance, km/h velocity, 3D reconstruction, LiDAR, r
 | Validation | PASSED | Full pytest, Python compilation, TOML/import validation, `git diff --check`, secret-pattern scan and headless Streamlit health smoke were run in this round. |
 
 This round preserves the previous 96-test baseline and adds coverage for review actions, grouped dataset versioning, v0.3 dataset/model contracts, lifecycle records and conditional metrics. The final test count is recorded from the release command rather than inferred here.
+
+## Deployment remediation — 2026-08-22
+
+The Streamlit Cloud failure occurred while importing the native `cv2` module under Python 3.14. The deploy requirements previously allowed `opencv-python-headless` while the external Ultralytics dependency requests `opencv-python`; both distributions install the same `cv2` namespace and are not safe to combine. The deploy contract now pins only `opencv-python==5.0.0.93`, whose CPython 3.14 Linux wheel was verified, and removes the headless package from the direct requirements. The app also emits a safe diagnostic if a stale or broken native wheel remains in a deployment cache.
+
+Validation after the fix: `108 passed`, `CV2_IMPORT_OK 5.0.0`, `STREAMLIT_HEALTH_OK`, compilation and `git diff --check` passed. The complete CPython 3.14 resolver check was additionally shown to depend on the selected Cloud platform wheel tags; the pinned OpenCV wheel itself was downloaded successfully for `manylinux_2_28_x86_64`/`cp314`. Streamlit Cloud should be rebuilt from the new commit and configured to use Python 3.12 or another runtime selected in its deployment settings with compatible wheels.
