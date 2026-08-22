@@ -21,6 +21,10 @@ from src.arqtech import ModelRegistry, describe_architecture
 from src.ml import DatasetBuilder, rank_for_review, LearningReportGenerator, TrainingConfig, save_training_config, inspect_manifest
 from src.input import InputManager, InputDescriptor, SourceType, SmartCapturePolicy, mask_url
 from src.vision.video_analysis import VideoAnalyzer
+from src.vision.perception_config import (
+    PERCEPTION_CURRENT, PERCEPTION_YOLO_BASELINE,
+    SMOOTHING_RAW, SMOOTHING_MOVING_AVERAGE, SMOOTHING_EXPONENTIAL,
+)
 
 st.set_page_config(page_title="Vision Robotics Lab", page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""<style>
@@ -56,8 +60,36 @@ def _video_frame(vs, index: int = 0):
     return None
 
 @st.cache_resource
-def get_pipeline(min_area, conf, cell, tracking):
-    return AnalysisPipeline(min_area=min_area, conf_threshold=conf, cell_size=cell, max_image_side=1280, enable_tracking=tracking)
+def get_pipeline(min_area, conf, cell, tracking, perception_mode, model_path, iou_threshold,
+                 device, image_size, max_detections, smoothing_enabled, smoothing_method,
+                 smoothing_window, smoothing_alpha):
+    return AnalysisPipeline(
+        min_area=min_area, conf_threshold=conf, cell_size=cell, max_image_side=1280,
+        enable_tracking=tracking, perception_mode=perception_mode, model_path=model_path,
+        iou_threshold=iou_threshold, device=device, image_size=image_size,
+        max_detections=max_detections, smoothing_enabled=smoothing_enabled,
+        smoothing_method=smoothing_method, smoothing_window=smoothing_window,
+        smoothing_alpha=smoothing_alpha,
+    )
+
+def result_provenance(result):
+    identity = result.model_identity or {}
+    return {
+        "model_name": identity.get("model", "UNKNOWN"),
+        "model_version": identity.get("model_version", "UNKNOWN"),
+        "model_backend": identity.get("model_type", "UNKNOWN"),
+        "tracks": [t.to_dict() for t in (result.tracks or [])],
+        "navigation_state": result.navigation_state,
+        "events": list(result.track_events or []),
+        "notes": list(result.notes or []),
+    }
+
+def pipeline_for(tracking: bool):
+    return get_pipeline(
+        min_area, conf_thresh, cell_size, tracking, perception_mode, model_path,
+        iou_threshold, device, image_size, max_detections, smoothing_enabled,
+        smoothing_method, smoothing_window, smoothing_alpha,
+    )
 
 with st.sidebar:
     st.markdown("## VISION ROBOTICS LAB")
@@ -78,14 +110,25 @@ with st.sidebar:
         start_cam = c1.button("START", use_container_width=True)
         stop_cam = c2.button("STOP", use_container_width=True)
         reconnect_cam = st.button("RECONNECT", use_container_width=True)
+    st.markdown("### PERCEPTION CONFIGURATION")
+    perception_mode = st.selectbox("Perception mode", [PERCEPTION_CURRENT, PERCEPTION_YOLO_BASELINE])
     conf_thresh = st.slider("Confidence threshold", 0.10, 0.90, 0.35, 0.05)
-    min_area = st.slider("Min contour area", 20, 500, 80, 10)
-    enable_tracking = st.checkbox("Tracking (live only)", value=(mode == "Live Camera"))
+    iou_threshold = st.slider("IoU threshold", 0.10, 0.90, 0.45, 0.05)
+    min_area = st.slider("Min contour area (CURRENT only)", 20, 500, 80, 10)
+    model_path = st.text_input("YOLO weights", value="yolo11n.pt", help="Used only by YOLO_BASELINE; Ultralytics is optional.")
+    device = st.selectbox("Inference device", ["auto", "cpu", "cuda:0"])
+    image_size = st.selectbox("YOLO image size", [320, 416, 512, 640, 768], index=3)
+    max_detections = st.slider("Max detections", 1, 300, 100, 1)
+    enable_tracking = st.checkbox("Tracking", value=(mode == "Live Camera"))
+    smoothing_enabled = st.checkbox("Temporal smoothing", value=False)
+    smoothing_method = st.selectbox("Smoothing method", [SMOOTHING_RAW, SMOOTHING_MOVING_AVERAGE, SMOOTHING_EXPONENTIAL])
+    smoothing_window = st.slider("Smoothing window", 1, 20, 5, 1)
+    smoothing_alpha = st.slider("Exponential alpha", 0.05, 1.0, 0.35, 0.05)
     run_planner = st.checkbox("Image-space planner", True)
     cell_size = st.slider("Grid cell (px)", 8, 32, 16, 4)
     show_path = st.checkbox("Navigation path", True)
     analyze_btn = st.button("RUN ANALYSIS", type="primary", use_container_width=True)
-    st.caption("Active: Classical CV · ONE pipeline for image / video / live")
+    st.caption(f"Active: {perception_mode} · YOLO is external baseline; ARQTECH is experimental")
 
 for key, default in [("result", None), ("original_bgr", None), ("last_file_id", None),
                      ("camera", None), ("live_running", False), ("fps", 0.0), ("frame_count", 0)]:
@@ -105,7 +148,7 @@ if mode == "Image Analysis" and uploaded is not None:
         if analyze_btn or file_id != st.session_state.last_file_id:
             st.session_state.last_file_id = file_id
             with st.spinner("Pipeline…"):
-                st.session_state.result = get_pipeline(min_area, conf_thresh, cell_size, False).run(preview, run_planner=run_planner)
+                st.session_state.result = pipeline_for(False).run(preview, run_planner=run_planner)
     except Exception as e:
         st.session_state.result = None
         st.error(str(e))
@@ -129,7 +172,7 @@ if mode == "Live Camera":
             elif "Video" in cam_src: cam = VideoFileSource(path=ip_url.strip())
             else: cam = IPCameraSource(url=ip_url.strip())
             cam.start(); st.session_state.camera = cam; st.session_state.live_running = True
-            st.session_state._live_pipe = get_pipeline(min_area, conf_thresh, cell_size, enable_tracking)
+            st.session_state._live_pipe = pipeline_for(enable_tracking)
         except Exception as e:
             st.session_state.live_running = False; st.session_state.camera = None; st.error(str(e))
     if st.session_state.live_running and st.session_state.camera is not None:
@@ -140,7 +183,10 @@ if mode == "Live Camera":
             packet = st.session_state.camera.read()
             if packet is not None and packet.image is not None:
                 try:
-                    result = st.session_state._live_pipe.run(packet.image, run_planner=run_planner)
+                    result = st.session_state._live_pipe.run(
+                        packet.image, run_planner=run_planner, timestamp=packet.timestamp,
+                        frame_id=packet.frame_id, source=packet.source,
+                    )
                     st.session_state.result = result; st.session_state.original_bgr = packet.image
                     st.session_state.fps = 1.0 / max(time.perf_counter() - t0, 1e-6)
                     st.session_state.frame_count += 1
@@ -153,11 +199,13 @@ s1,s2,s3,s4,s5 = st.columns(5)
 cam_on = st.session_state.live_running
 s1.markdown("**CAMERA**  \n" + ("<span class='status-on'>● ONLINE</span>" if cam_on else "<span class='status-off'>○ OFFLINE</span>"), unsafe_allow_html=True)
 s2.markdown("**PERCEPTION**  \n" + ("<span class='status-on'>● ACTIVE</span>" if result else "<span class='status-off'>○ IDLE</span>"), unsafe_allow_html=True)
-s3.markdown("**MODEL**  \n<span class='status-on'>● CLASSICAL</span>", unsafe_allow_html=True)
+model_label = (result.model_identity.get("model", "UNKNOWN") if result else perception_mode)
+model_status = "UNAVAILABLE" if result and result.model_identity.get("available") is False else "ACTIVE"
+s3.markdown(f"**MODEL**  \n<span class='status-on'>● {model_label} · {model_status}</span>", unsafe_allow_html=True)
 s4.markdown("**ARQTECH**  \n<span class='status-off'>○ SCAFFOLD</span>", unsafe_allow_html=True)
 s5.markdown("**LEARN**  \n<span class='status-off'>○ LOOP</span>", unsafe_allow_html=True)
 
-tabs = st.tabs(["MISSION CONTROL", "LIVE", "VIDEO INPUT", "RECORDED VIDEO", "PERCEPTION", "SCENE", "NAVIGATION", "BRAIN", "REVIEW", "DATASET", "TRAINING", "ARQTECH", "DIAGNOSTICS", "SYSTEM"])
+tabs = st.tabs(["MISSION CONTROL", "LIVE", "VIDEO INPUT", "RECORDED VIDEO", "PERCEPTION", "SCENE", "NAVIGATION", "BRAIN", "REVIEW", "DATASET", "TRAINING", "ARQTECH", "DIAGNOSTICS", "SYSTEM", "BASELINE COMPARISON"])
 
 with tabs[0]:
     if original_bgr is None: st.info("Upload an image or start a camera.")
@@ -178,7 +226,8 @@ with tabs[0]:
                     free_space_ratio=result.scene.estimated_free_space_ratio,
                     risk_score=result.risk.score, risk_level=result.risk.level, decision=result.decision.action,
                     uncertainty_overall=result.uncertainty.overall if result.uncertainty else None,
-                    capture_reason="MANUAL", source_type="STREAMLIT", model_name="classical-cv-baseline")
+                    capture_reason="MANUAL", source_type="STREAMLIT", source_identifier=result.source,
+                    frame_id=result.frame_id, **result_provenance(result))
                 st.success(f"Stored {sample.experience_id}" if sample else "Skipped")
 
 with tabs[1]:
@@ -197,6 +246,8 @@ with tabs[1]:
             if result.inventory:
                 st.markdown("**INVENTORY**")
                 for k, v in result.inventory.items(): st.write(f"{k} × {v}")
+        st.markdown(f"**MODEL:** `{result.model_identity.get('model', 'UNKNOWN')}` · `{result.model_identity.get('model_type', 'UNKNOWN')}`")
+        st.markdown(f"**TRACKING:** `{len(result.tracks)}` tracks · **CALIBRATION:** `{result.calibration_status}`")
         for line in (result.narrative or []):
             st.write("• " + line)
 
@@ -255,7 +306,10 @@ with tabs[3]:
                 pkt0 = _video_frame(vs, 0)
                 if pkt0 is not None and getattr(pkt0, "image", None) is not None:
                     try:
-                        r0 = get_pipeline(min_area, conf_thresh, cell_size, True).run(pkt0.image, run_planner=run_planner)
+                        r0 = pipeline_for(True).run(
+                            pkt0.image, run_planner=run_planner, timestamp=pkt0.timestamp,
+                            frame_id=pkt0.frame_id, source=pkt0.source,
+                        )
                         st.session_state.result = r0
                         st.session_state.original_bgr = pkt0.image
                         st.session_state._last_vid_pkt = pkt0
@@ -284,7 +338,10 @@ with tabs[3]:
                 if pkt is None or getattr(pkt, "image", None) is None:
                     st.error("Não foi possível ler este frame.")
                 else:
-                    r = get_pipeline(min_area, conf_thresh, cell_size, True).run(pkt.image, run_planner=run_planner)
+                    r = pipeline_for(True).run(
+                        pkt.image, run_planner=run_planner, timestamp=pkt.timestamp,
+                        frame_id=pkt.frame_id, source=pkt.source,
+                    )
                     st.session_state.result = r
                     st.session_state.original_bgr = pkt.image
                     st.session_state._last_vid_pkt = pkt
@@ -305,11 +362,11 @@ with tabs[3]:
                         capture_reason="MANUAL", source_type="RECORDED_VIDEO",
                         source_identifier=str(meta.get("filename")),
                         frame_id=pkt.frame_id if pkt else frame_idx,
-                        model_name="classical-cv-baseline",
+                        **result_provenance(st.session_state.result),
                     )
                     st.success(sample.experience_id if sample else "Skipped")
             if c3.button("FAST SCAN", key="vid_fast"):
-                analyzer = VideoAnalyzer(get_pipeline(min_area, conf_thresh, cell_size, True))
+                analyzer = VideoAnalyzer(pipeline_for(True))
                 results, fids, tss, skipped = [], [], [], 0
                 t0 = time.perf_counter()
                 fps = meta.get("source_fps") if isinstance(meta.get("source_fps"), (int, float)) and meta.get("source_fps") else 25
@@ -319,7 +376,10 @@ with tabs[3]:
                     if pkt is None or getattr(pkt, "image", None) is None:
                         skipped += 1
                         continue
-                    r = analyzer.analyze_frame(pkt.image, run_planner=run_planner)
+                    r = analyzer.analyze_frame(
+                        pkt.image, run_planner=run_planner, timestamp=pkt.timestamp,
+                        frame_id=pkt.frame_id, source=f"video:{meta.get('filename')}",
+                    )
                     results.append(r); fids.append(getattr(pkt, "frame_id", i)); tss.append(i / float(fps) if fps else float(i))
                 if results:
                     st.session_state.result = results[-1]
@@ -347,7 +407,17 @@ with tabs[4]:
     if result is None: st.info("No analysis.")
     else:
         st.image(bgr_to_rgb(result.annotated_image), use_container_width=True)
-        if result.detections: st.dataframe([d.to_dict() for d in result.detections], use_container_width=True)
+        st.markdown(f"**MODEL:** `{result.model_identity.get('model', 'UNKNOWN')}` · **TYPE:** `{result.model_identity.get('model_type', 'UNKNOWN')}` · **VERSION:** `{result.model_identity.get('model_version', 'UNKNOWN')}`")
+        if result.detections:
+            st.markdown("#### NORMALIZED DETECTIONS")
+            st.dataframe(result.enriched_detections, use_container_width=True)
+        if result.tracks:
+            st.markdown("#### TRACKS")
+            st.dataframe([t.to_dict() for t in result.tracks], use_container_width=True)
+        if result.track_events:
+            st.markdown("#### TEMPORAL EVENTS")
+            st.dataframe(result.track_events, use_container_width=True)
+        st.caption("Positions and velocities are image-space. Real-world speed is disabled without valid camera calibration.")
 
 with tabs[5]:
     if result is None: st.info("No analysis.")
@@ -407,16 +477,45 @@ with tabs[11]:
 
 with tabs[12]:
     if result is None: st.info("No analysis.")
-    else: st.json(result.metrics())
+    else:
+        st.markdown("### PERFORMANCE TELEMETRY")
+        st.json(result.telemetry)
+        st.markdown("### MODEL PROVENANCE")
+        st.json(result.model_identity)
+        st.markdown("### PIPELINE METRICS")
+        st.json(result.metrics())
+        st.markdown("### NOTES")
+        for note in result.notes:
+            st.write(note)
 
 with tabs[13]:
     import platform
+    model_status = result.model_identity if result else {"model": perception_mode, "available": "N/A"}
     st.markdown(f"""
 | Component | Status |
 |-----------|--------|
-| Classical Detector | ACTIVE |
-| Recorded Video Lab | FIXED (safe metadata) |
-| ARQTECH | SCAFFOLD |
+| Current Detector | AVAILABLE / FALLBACK |
+| YOLO Baseline | {model_status.get('available', 'NOT SELECTED')} |
+| Tracking | {('ACTIVE' if result and result.tracking_active else 'INACTIVE')} |
+| Temporal Smoothing | {(result.smoothing.get('method') if result else smoothing_method)} |
+| Calibration | {(result.calibration_status if result else 'NOT CALIBRATED')} |
+| Recorded Video Lab | ACTIVE |
+| ARQTECH | EXPERIMENTAL SCAFFOLD — NOT YOLO |
 | Python | {platform.python_version()} |
 """)
+    st.caption("YOLO is used as an external baseline and is not ARQTECH. Distances and velocities remain image-space until calibration is valid.")
     st.caption("https://github.com/edu-moraess/vision-robotics-analysis-lab")
+
+with tabs[14]:
+    st.markdown("### BASELINE COMPARISON")
+    st.caption("Same preprocessed frame. This reports measured detector outputs only; it does not replace ground truth or establish which model is better.")
+    if original_bgr is None or result is None:
+        st.info("Analyze an image, camera frame or video frame first.")
+    elif st.button("COMPARE CURRENT DETECTOR VS YOLO BASELINE"):
+        try:
+            comparison = pipeline_for(False).compare_models(
+                original_bgr, timestamp=result.timestamp, frame_id=result.frame_id,
+            )
+            st.json(comparison)
+        except Exception as exc:
+            st.error(f"Comparison failed: {exc}")

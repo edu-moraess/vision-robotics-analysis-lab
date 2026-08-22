@@ -1,0 +1,2 @@
+# Optional external neural baseline; the application runs without this package.
+ultralytics>=8.3.0

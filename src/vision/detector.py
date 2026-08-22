@@ -1,42 +1,97 @@
-"""Classical Computer Vision detector (baseline). Canny + contours + color. NOT a neural network."""
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
+
 import cv2
 import numpy as np
+
 from .geometry import box_iou
+
 
 @dataclass
 class Detection:
+    """Model-agnostic detection contract used by the complete perception stack."""
+
     class_name: str
     confidence: float
     bbox: Tuple[int, int, int, int]
     center: Tuple[float, float]
     object_id: Optional[int] = None
+    class_id: Optional[int] = None
+    source_model: str = "CURRENT DETECTOR"
+    model_version: str = "baseline"
+    model_type: str = "EXISTING CLASSICAL DETECTOR"
+    timestamp: Optional[float] = None
+    frame_id: Optional[int] = None
 
     @property
     def width(self) -> int:
-        return max(0, self.bbox[2] - self.bbox[0])
+        return max(0, int(self.bbox[2] - self.bbox[0]))
 
     @property
     def height(self) -> int:
-        return max(0, self.bbox[3] - self.bbox[1])
+        return max(0, int(self.bbox[3] - self.bbox[1]))
 
     @property
     def area(self) -> int:
         return self.width * self.height
 
+    @property
+    def cx(self) -> float:
+        return float(self.center[0])
+
+    @property
+    def cy(self) -> float:
+        return float(self.center[1])
+
     def to_dict(self) -> dict:
-        return {"class": self.class_name, "confidence": round(self.confidence, 3),
-                "bbox": self.bbox, "center": self.center, "width": self.width,
-                "height": self.height, "area": self.area, "id": self.object_id}
+        return {
+            "class": self.class_name,
+            "class_name": self.class_name,
+            "class_id": self.class_id,
+            "confidence": round(float(self.confidence), 3),
+            "bbox": tuple(int(v) for v in self.bbox),
+            "center": (round(float(self.center[0]), 3), round(float(self.center[1]), 3)),
+            "cx": round(self.cx, 3),
+            "cy": round(self.cy, 3),
+            "width": self.width,
+            "height": self.height,
+            "area": self.area,
+            "id": self.object_id,
+            "track_id": self.object_id,
+            "source_model": self.source_model,
+            "model": self.source_model,
+            "model_version": self.model_version,
+            "model_type": self.model_type,
+            "timestamp": self.timestamp,
+            "frame_id": self.frame_id,
+        }
+
 
 class ClassicalDetector:
+    """Existing heuristic detector kept as the always-available fallback."""
+
+    model_name = "CURRENT DETECTOR"
+    model_version = "baseline"
+    model_type = "EXISTING CLASSICAL DETECTOR"
+
     def __init__(self, min_area: int = 80, conf_threshold: float = 0.35):
         self.min_area = min_area
         self.conf_threshold = conf_threshold
 
-    def detect(self, frame: np.ndarray) -> List[Detection]:
+    @property
+    def identity(self) -> dict:
+        return {
+            "model": self.model_name,
+            "model_type": self.model_type,
+            "model_version": self.model_version,
+            "weights": "NONE",
+            "available": True,
+        }
+
+    def detect(self, frame: np.ndarray, timestamp: Optional[float] = None,
+               frame_id: Optional[int] = None) -> List[Detection]:
         if frame is None or frame.size == 0:
             return []
         detections = []
@@ -52,14 +107,26 @@ class ClassicalDetector:
             x, y, bw, bh = cv2.boundingRect(cnt)
             if bw < 8 or bh < 8 or bw > w * 0.85 or bh > h * 0.7:
                 continue
-            roi = frame[y:y+bh, x:x+bw]
+            roi = frame[y:y + bh, x:x + bw]
             if roi.size == 0:
                 continue
             mean_bgr = tuple(map(int, cv2.mean(roi)[:3]))
             class_name, conf = self._classify(mean_bgr, area, bw, bh)
             if conf < self.conf_threshold:
                 continue
-            detections.append(Detection(class_name, conf, (x, y, x+bw, y+bh), (x+bw/2.0, y+bh/2.0)))
+            detections.append(
+                Detection(
+                    class_name=class_name,
+                    confidence=float(conf),
+                    bbox=(x, y, x + bw, y + bh),
+                    center=(x + bw / 2.0, y + bh / 2.0),
+                    source_model=self.model_name,
+                    model_version=self.model_version,
+                    model_type=self.model_type,
+                    timestamp=timestamp,
+                    frame_id=frame_id,
+                )
+            )
         return self._nms(detections)
 
     def _classify(self, mean_bgr, area, bw, bh):

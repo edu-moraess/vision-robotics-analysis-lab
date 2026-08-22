@@ -29,8 +29,11 @@ class NavObstacle:
 
 RELEVANCE_RANK = {"NONE": 0, "LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
 
-def _relevance_for_class(class_name: str, conf: float) -> str:
-    name = (class_name or "").lower()
+def _relevance_for_class(class_name: str, conf: float, class_mapping=None) -> str:
+    name = (class_name or "").lower().strip()
+    if class_mapping is not None:
+        # An explicit mapping is authoritative: unknown COCO classes are not obstacles.
+        return str(class_mapping.get(name, "NONE")).upper()
     if name in ("person", "dynamic", "vehicle", "car"):
         return "HIGH" if conf >= 0.5 else "MEDIUM"
     if name in ("obstacle", "wall", "barrier", "furniture"):
@@ -39,7 +42,8 @@ def _relevance_for_class(class_name: str, conf: float) -> str:
         return "LOW"
     return "MEDIUM"
 
-def fuse_obstacles(detections, tracks=None, min_relevance="MEDIUM", merge_iou=0.3, image_shape=None):
+def fuse_obstacles(detections, tracks=None, min_relevance="MEDIUM", merge_iou=0.3,
+                   image_shape=None, class_mapping=None):
     from ..vision.geometry import box_iou
     candidates = []
     used_tracks = False
@@ -51,7 +55,7 @@ def fuse_obstacles(detections, tracks=None, min_relevance="MEDIUM", merge_iou=0.
             conf = float(getattr(t, "confidence", 0.5))
             bbox = tuple(getattr(t, "bbox"))
             cx, cy = getattr(t, "center", ((bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2))
-            rel = _relevance_for_class(getattr(t, "class_name", "obstacle"), conf)
+            rel = _relevance_for_class(getattr(t, "class_name", "obstacle"), conf, class_mapping)
             if RELEVANCE_RANK[rel] < RELEVANCE_RANK[min_relevance]:
                 continue
             candidates.append(NavObstacle(
@@ -70,7 +74,7 @@ def fuse_obstacles(detections, tracks=None, min_relevance="MEDIUM", merge_iou=0.
             bbox = getattr(d, "bbox", None)
             if not bbox:
                 continue
-            rel = _relevance_for_class(name, conf)
+            rel = _relevance_for_class(name, conf, class_mapping)
             if RELEVANCE_RANK[rel] < RELEVANCE_RANK[min_relevance]:
                 continue
             x1, y1, x2, y2 = map(int, bbox)

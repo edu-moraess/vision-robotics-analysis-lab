@@ -114,6 +114,8 @@ class NavigationStateView:
 
 def derive_navigation_state(decision_action, path_ok, risk_level):
     action = (decision_action or "").upper()
+    if action in ("REPLAN", "REPLANNING"):
+        return NavigationStateView(status=REPLANNING, message="Replanning requested (image-space).")
     if action in ("STOP", "STOPPED") or not path_ok:
         if risk_level in ("CRITICAL", "HIGH"):
             status, msg = NO_VALID_PATH, "No valid path or elevated risk (image-space)."

@@ -1,3 +1,37 @@
+perception:
+  mode: CURRENT
+  model_path: yolo11n.pt
+  confidence_threshold: 0.35
+  iou_threshold: 0.45
+  device: auto
+  image_size: 640
+  classes: null
+  max_detections: 100
+  tracker_type: IOU
+  tracking_enabled: false
+  smoothing_enabled: false
+  smoothing_method: RAW
+  smoothing_window: 5
+  smoothing_alpha: 0.35
+  calibration_status: NOT CALIBRATED
+  class_mapping:
+    person: HIGH
+    bicycle: HIGH
+    car: HIGH
+    motorcycle: HIGH
+    bus: HIGH
+    truck: HIGH
+    chair: MEDIUM
+    couch: MEDIUM
+    bed: MEDIUM
+    dining table: MEDIUM
+    table: MEDIUM
+    bench: MEDIUM
+    obstacle: HIGH
+    wall: CRITICAL
+    barrier: CRITICAL
+    dynamic: HIGH
+
 detector:
   min_area: 80
   conf_threshold: 0.35

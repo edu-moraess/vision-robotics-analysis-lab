@@ -19,9 +19,10 @@ def annotate_detections(image, detections, draw_labels=True, draw_centers=True):
         if draw_centers:
             cv2.circle(out, (int(det.center[0]), int(det.center[1])), 3, color, -1)
         if draw_labels:
-            label = f"{det.class_name} {det.confidence:.2f}"
+            label = f"{det.class_name.upper()}"
             if det.object_id is not None:
-                label = f"#{det.object_id} {label}"
+                label = f"{label} #{int(det.object_id):02d}"
+            label = f"{label} {float(det.confidence):.0%}"
             (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
             cv2.rectangle(out, (x1, max(0, y1 - th - 6)), (x1 + tw + 4, y1), color, -1)
             cv2.putText(out, label, (x1 + 2, max(th, y1 - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (20, 20, 20), 1, cv2.LINE_AA)
