@@ -15,6 +15,10 @@ from ..brain.decision_engine import DecisionEngine, SceneDecision
 from ..brain.uncertainty import UncertaintyEngine, UncertaintyReport
 from ..planning.image_planner import ImageSpacePlanner, ImagePlanResult
 from ..planning.occupancy import build_occupancy_from_mask, build_cost_map, OccupancyGrid
+from ..vision.navigation_relevance import enrich_detections
+from ..vision.scene_narrative import build_narrative, scene_inventory
+from ..robotics.world_model import WorldModel
+from ..robotics.navigation_state import derive_navigation_state
 from .timing import LatencyBreakdown, measure
 
 @dataclass
@@ -39,6 +43,11 @@ class AnalysisResult:
     geometries: List[ObjectGeometry] = field(default_factory=list)
     latency: LatencyBreakdown = field(default_factory=LatencyBreakdown)
     notes: List[str] = field(default_factory=list)
+    narrative: List[str] = field(default_factory=list)
+    inventory: dict = field(default_factory=dict)
+    enriched_detections: List[dict] = field(default_factory=list)
+    world_model: Optional[dict] = None
+    navigation_state: Optional[dict] = None
 
     def metrics(self) -> Dict[str, Any]:
         avg_conf = float(np.mean([d.confidence for d in self.detections])) if self.detections else 0.0
@@ -60,6 +69,8 @@ class AnalysisResult:
             out["uncertainty_overall"] = round(self.uncertainty.overall, 3)
         if self.latency is not None and hasattr(self.latency, "to_dict"):
             out["latency_breakdown_ms"] = self.latency.to_dict()
+        if self.navigation_state:
+            out["navigation_status"] = self.navigation_state.get("status")
         return out
 
 class AnalysisPipeline:
@@ -141,6 +152,12 @@ class AnalysisPipeline:
             if plan and plan.path_px:
                 path_img = draw_path(path_img, plan.path_px)
         elapsed = (time.perf_counter() - t0) * 1000.0
+        enriched = enrich_detections(detections, w, h)
+        path_ok = bool(plan and plan.success)
+        narrative = build_narrative(detections, scene.estimated_free_space_ratio, path_ok, decision.action, risk.level, enriched)
+        inv = scene_inventory(detections)
+        wm = WorldModel.from_enriched(enriched, scene.estimated_free_space_ratio, path_ok)
+        nav = derive_navigation_state(decision.action, path_ok, risk.level)
         return AnalysisResult(
             detections=detections, scene=scene, risk=risk, plan=plan,
             plan_comparison=comparison, decision=decision,
@@ -149,4 +166,6 @@ class AnalysisPipeline:
             preprocess=prep, occupancy=occupancy, cost_map=cost_map,
             tracks=tracks, tracking_active=tracking_active,
             uncertainty=unc, geometries=geometries, latency=lat, notes=notes,
+            narrative=narrative, inventory=inv, enriched_detections=enriched,
+            world_model=wm.to_dict(), navigation_state=nav.to_dict(),
         )
