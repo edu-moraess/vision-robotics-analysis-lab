@@ -14,10 +14,9 @@ if str(ROOT) not in sys.path:
 from src.core.pipeline import AnalysisPipeline
 from src.camera import WebcamSource, IPCameraSource, SmartphoneCameraSource, VideoFileSource
 from src.learning import ExperienceMemory, FrameCache
-from src.arqtech import ModelRegistry, ExperimentLog, describe_architecture
-from src.ml import DatasetBuilder, rank_for_review, LearningReportGenerator, TrainingConfig, save_training_config
+from src.arqtech import ModelRegistry, describe_architecture
+from src.ml import DatasetBuilder, rank_for_review, LearningReportGenerator, TrainingConfig, save_training_config, inspect_manifest
 from src.input import InputManager, InputDescriptor, SourceType, SmartCapturePolicy, mask_url
-from src.input.smart_capture import SmartCaptureState
 
 st.set_page_config(page_title="Vision Robotics Lab", page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""<style>
@@ -71,9 +70,8 @@ with st.sidebar:
     run_planner = st.checkbox("Image-space planner", True)
     cell_size = st.slider("Grid cell (px)", 8, 32, 16, 4)
     show_path = st.checkbox("Navigation path", True)
-    show_free = st.checkbox("Free-space overlay", True)
     analyze_btn = st.button("RUN ANALYSIS", type="primary", use_container_width=True)
-    st.caption("Active detector: Classical CV · ARQTECH: scaffold")
+    st.caption("Active: Classical CV · ARQTECH: scaffold · Inference ≠ Training")
 
 for key, default in [("result", None), ("original_bgr", None), ("last_file_id", None),
                      ("camera", None), ("live_running", False), ("fps", 0.0), ("frame_count", 0)]:
@@ -127,10 +125,9 @@ if mode == "Live Camera":
             t0 = time.perf_counter()
             packet = st.session_state.camera.read()
             if packet is not None and packet.image is not None:
-                frame = packet.image
                 try:
-                    result = st.session_state._live_pipe.run(frame, run_planner=run_planner)
-                    st.session_state.result = result; st.session_state.original_bgr = frame
+                    result = st.session_state._live_pipe.run(packet.image, run_planner=run_planner)
+                    st.session_state.result = result; st.session_state.original_bgr = packet.image
                     st.session_state.fps = 1.0 / max(time.perf_counter() - t0, 1e-6)
                     st.session_state.frame_count += 1
                 except Exception as e: st.error(str(e))
@@ -144,7 +141,7 @@ s1.markdown("**CAMERA**  \n" + ("<span class='status-on'>● ONLINE</span>" if c
 s2.markdown("**PERCEPTION**  \n" + ("<span class='status-on'>● ACTIVE</span>" if result else "<span class='status-off'>○ IDLE</span>"), unsafe_allow_html=True)
 s3.markdown("**MODEL**  \n<span class='status-on'>● CLASSICAL</span>", unsafe_allow_html=True)
 s4.markdown("**ARQTECH**  \n<span class='status-off'>○ SCAFFOLD</span>", unsafe_allow_html=True)
-s5.markdown("**INPUT**  \n<span class='status-off'>○ LAYER</span>", unsafe_allow_html=True)
+s5.markdown("**LEARN**  \n<span class='status-off'>○ LOOP</span>", unsafe_allow_html=True)
 
 tabs = st.tabs(["MISSION CONTROL", "LIVE", "VIDEO INPUT", "PERCEPTION", "SCENE", "NAVIGATION", "BRAIN", "REVIEW", "DATASET", "TRAINING", "ARQTECH", "DIAGNOSTICS", "SYSTEM"])
 
@@ -166,8 +163,9 @@ with tabs[0]:
                     detections=[d.to_dict() for d in result.detections],
                     free_space_ratio=result.scene.estimated_free_space_ratio,
                     risk_score=result.risk.score, risk_level=result.risk.level, decision=result.decision.action,
-                    uncertainty_overall=result.uncertainty.overall if result.uncertainty else None)
-                st.success(f"Stored {sample.sample_id}" if sample else "Skipped")
+                    uncertainty_overall=result.uncertainty.overall if result.uncertainty else None,
+                    capture_reason="MANUAL", source_type="STREAMLIT", model_name="classical-cv-baseline")
+                st.success(f"Stored {sample.experience_id}" if sample else "Skipped (duplicate/filter)")
 
 with tabs[1]:
     if result is None: st.info("No frame.")
@@ -226,35 +224,49 @@ with tabs[6]:
         st.metric("ACTION", result.decision.action); st.markdown(result.decision.reason)
 
 with tabs[7]:
-    st.markdown("### HUMAN REVIEW")
+    st.markdown("### EXPERIENCE & HUMAN REVIEW")
     mem = st.session_state.experience_memory
+    summ = mem.summary()
+    a,b,c,d,e = st.columns(5)
+    a.metric("Total", summ["total"]); b.metric("Pending", summ["pending"])
+    c.metric("Accepted", summ["accepted"]); d.metric("Corrected", summ["corrected"])
+    e.metric("Training-ready", summ["training_ready"])
+    st.caption("Prediction ≠ ground truth. Only ACCEPTED/CORRECTED enter datasets. Inference never trains.")
     ranked = rank_for_review(mem.list_samples(100), limit=20)
     if ranked:
-        choice = st.selectbox("Sample", [r.get("sample_id") for r in ranked])
+        choice = st.selectbox("Sample", [r.get("experience_id") or r.get("sample_id") for r in ranked])
+        sel = next((r for r in ranked if (r.get("experience_id") or r.get("sample_id")) == choice), ranked[0])
+        st.json({k: sel.get(k) for k in ("experience_id", "capture_reason", "review_status", "uncertainty_overall", "model_name")})
         c1,c2,c3 = st.columns(3)
-        if c1.button("ACCEPT"): mem.set_review_status(choice, "accepted")
+        if c1.button("ACCEPT"): mem.set_review_status(choice, "accepted"); st.success("accepted")
         if c2.button("REJECT"): mem.set_review_status(choice, "rejected")
         if c3.button("CORRECT"): mem.set_review_status(choice, "corrected")
-    else: st.info("Store experiences first.")
+    else:
+        st.info("Store experiences from Mission Control first.")
 
 with tabs[8]:
     st.markdown("### DATASET LAB")
     approved = [s for s in st.session_state.experience_memory.list_samples(500) if s.get("review_status") in ("accepted", "corrected")]
-    st.metric("Approved", len(approved))
+    st.metric("Approved / training-ready", len(approved))
     if st.button("Build dataset version"):
         try:
-            man = DatasetBuilder().build_from_experiences(approved); st.json(man.to_dict())
-        except Exception as e: st.error(str(e))
+            man = DatasetBuilder().build_from_experiences(approved)
+            st.json(man.to_dict())
+            for w in inspect_manifest(man.to_dict()):
+                st.warning(w)
+        except Exception as e:
+            st.error(str(e))
+    st.dataframe(DatasetBuilder().list_datasets(), use_container_width=True)
 
 with tabs[9]:
-    st.warning("Config only — does not train. Metrics NOT MEASURED.")
+    st.warning("Config only — does NOT train. Metrics remain NOT MEASURED. Active model is never auto-replaced.")
     if st.button("Save training config"):
         cfg = TrainingConfig(experiment_id=f"exp_{uuid.uuid4().hex[:8]}", model_name="ARQTECH",
                              training_mode="FROM_SCRATCH", dataset_id="none")
         st.success(str(save_training_config(cfg)))
 
 with tabs[10]:
-    st.warning("ARQTECH SCAFFOLD — not trained.")
+    st.warning("ARQTECH SCAFFOLD — not trained. No fabricated mAP.")
     st.json(describe_architecture())
     st.dataframe(ModelRegistry().list_models(), use_container_width=True)
     if st.button("GENERATE LEARNING REPORT"):
@@ -272,8 +284,10 @@ with tabs[12]:
 |-----------|--------|
 | Classical Detector | ACTIVE |
 | Universal Video Input | IMPLEMENTED |
+| Experience Memory | IMPLEMENTED |
+| Human Review / Dataset | IMPLEMENTED |
+| Training config | IMPLEMENTED (not executed) |
 | ARQTECH | SCAFFOLD |
-| YouTube/Twitch direct | NOT COMPATIBLE without yt-dlp |
 | Python | {platform.python_version()} |
 """)
     st.caption("https://github.com/edu-moraess/vision-robotics-analysis-lab")
