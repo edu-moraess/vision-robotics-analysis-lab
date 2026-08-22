@@ -7,6 +7,7 @@ import numpy as np
 from ..vision.detector import ClassicalDetector, Detection
 from ..vision.scene import SceneAnalyzer, SceneAnalysis
 from ..vision.annotator import annotate_detections, overlay_free_space, draw_path
+from ..vision.geometry import GeometryEngine, ObjectGeometry
 from ..vision.preprocessing import Preprocessor, PreprocessResult
 from ..vision.tracker import IoUTracker, Track
 from ..brain.risk_engine import RiskEngine, RiskAssessment
@@ -35,6 +36,7 @@ class AnalysisResult:
     tracks: List[Track] = field(default_factory=list)
     tracking_active: bool = False
     uncertainty: Optional[UncertaintyReport] = None
+    geometries: List[ObjectGeometry] = field(default_factory=list)
     latency: LatencyBreakdown = field(default_factory=LatencyBreakdown)
     notes: List[str] = field(default_factory=list)
 
@@ -130,6 +132,8 @@ class AnalysisPipeline:
                 path_nodes=plan.nodes_explored if plan else 0,
                 decision_confidence=decision.confidence,
             )
+        with measure("geometry", lat):
+            geometries = GeometryEngine().analyze(detections, (h, w))
         with measure("render", lat):
             annotated = annotate_detections(work, detections)
             free_overlay = overlay_free_space(work, scene.free_space_mask) if scene.free_space_mask is not None else work.copy()
@@ -144,5 +148,5 @@ class AnalysisPipeline:
             path_overlay=path_img, processing_time_ms=elapsed, image_shape=(h, w),
             preprocess=prep, occupancy=occupancy, cost_map=cost_map,
             tracks=tracks, tracking_active=tracking_active,
-            uncertainty=unc, latency=lat, notes=notes,
+            uncertainty=unc, geometries=geometries, latency=lat, notes=notes,
         )
