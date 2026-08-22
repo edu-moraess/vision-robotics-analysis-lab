@@ -1,5 +1,15 @@
-from .base import CameraSource, FramePacket
+from .base import CameraSource, FramePacket, CameraStatus
 from .webcam import WebcamSource
 from .ip_camera import IPCameraSource
+from .video_file import VideoFileSource
+from .smartphone import SmartphoneCameraSource
 
-__all__ = ["CameraSource", "FramePacket", "WebcamSource", "IPCameraSource"]
+__all__ = [
+    "CameraSource",
+    "FramePacket",
+    "CameraStatus",
+    "WebcamSource",
+    "IPCameraSource",
+    "VideoFileSource",
+    "SmartphoneCameraSource",
+]
