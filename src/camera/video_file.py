@@ -8,7 +8,7 @@ from .base import CameraSource, CameraStatus, FramePacket
 
 class VideoFileSource(CameraSource):
     def __init__(self, path: str, loop: bool = False):
-        self.path = path
+        self.path = str(PathLib(path).expanduser().resolve()) if path else path
         self.loop = loop
         self._cap = None
         self._frame_id = 0
@@ -24,17 +24,41 @@ class VideoFileSource(CameraSource):
 
     def start(self) -> CameraStatus:
         self.stop()
-        self._cap = cv2.VideoCapture(self.path)
+        p = PathLib(self.path)
+        if not p.exists():
+            self._message = f"file not found: {self.path}"
+            return self.status()
+        if p.stat().st_size == 0:
+            self._message = "file is empty (0 bytes)"
+            return self.status()
+        self._cap = cv2.VideoCapture(self.path, cv2.CAP_FFMPEG)
         if not self._cap.isOpened():
-            self._message = f"cannot open video: {self.path[:48]}"
+            self._cap = cv2.VideoCapture(self.path)
+        if not self._cap.isOpened():
+            self._message = (
+                f"OpenCV cannot decode this video: {p.name}. "
+                "Phone videos (H.264/HEVC) often fail with opencv-headless. "
+                "Try re-exporting as MP4 (H.264 + yuv420p) or AVI, or extract frames as images."
+            )
             self._cap = None
             return self.status()
         self._file_fps = float(self._cap.get(cv2.CAP_PROP_FPS) or 0.0)
         self._frame_count = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
         self._width = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
         self._height = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        ok, frame = self._cap.read()
+        if not ok or frame is None:
+            self._message = (
+                f"opened but no frames decoded: {p.name}. "
+                "Codec may be unsupported (HEVC/HDR). Re-encode to H.264 MP4."
+            )
+            self._cap.release()
+            self._cap = None
+            return self.status()
+        self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         self._frame_id = 0
         self._paused = False
+        self._last_frame = frame
         self._message = "online"
         return self.status()
 
@@ -66,12 +90,19 @@ class VideoFileSource(CameraSource):
             return None
         frame_index = max(0, int(frame_index))
         if self._frame_count > 0:
-            frame_index = min(frame_index, self._frame_count - 1)
+            frame_index = min(frame_index, max(0, self._frame_count - 1))
         self._cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
         ok, frame = self._cap.read()
         if not ok or frame is None:
-            self._message = "seek/read failure"
-            return None
+            self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            frame = None
+            for i in range(frame_index + 1):
+                ok, frame = self._cap.read()
+                if not ok:
+                    self._message = "seek/read failure"
+                    return None
+            if frame is None:
+                return None
         self._frame_id = frame_index + 1
         self._last_frame = frame
         self._message = "online"
@@ -82,7 +113,7 @@ class VideoFileSource(CameraSource):
         ratio = max(0.0, min(1.0, float(ratio)))
         if self._frame_count <= 0:
             return self.read()
-        return self.seek_frame(int(ratio * (self._frame_count - 1)))
+        return self.seek_frame(int(ratio * max(0, self._frame_count - 1)))
 
     def read(self) -> Optional[FramePacket]:
         if not self.is_available():
