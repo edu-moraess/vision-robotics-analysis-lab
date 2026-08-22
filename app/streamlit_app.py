@@ -168,8 +168,35 @@ with tabs[0]:
                 st.success(f"Stored {sample.experience_id}" if sample else "Skipped (duplicate/filter)")
 
 with tabs[1]:
-    if result is None: st.info("No frame.")
-    else: st.image(bgr_to_rgb(result.path_overlay if show_path else result.annotated_image), use_container_width=True)
+    st.markdown("### LIVE ROBOTIC PERCEPTION")
+    if result is None:
+        st.info("No frame. Upload an image or start a camera.")
+    else:
+        col_v, col_s = st.columns([2, 1])
+        with col_v:
+            st.image(bgr_to_rgb(result.path_overlay if show_path else result.annotated_image), use_container_width=True)
+        with col_s:
+            nav = result.navigation_state or {}
+            st.markdown(f"**NAV** `{nav.get('status', 'N/A')}`")
+            st.caption(nav.get("message", ""))
+            st.metric("ACTION", result.decision.action)
+            st.metric("RISK", result.risk.level)
+            st.metric("FREE SPACE", f"{result.scene.estimated_free_space_ratio*100:.0f}%")
+            if result.inventory:
+                st.markdown("**SCENE INVENTORY**")
+                for k, v in result.inventory.items():
+                    st.write(f"{k} × {v}")
+        st.markdown("**SCENE UNDERSTANDING**")
+        for line in (result.narrative or []):
+            st.write("• " + line)
+        if result.enriched_detections:
+            st.markdown("**DETECTIONS** (classes from active model — not hard-coded UI list)")
+            for row in result.enriched_detections[:12]:
+                st.write(
+                    f"**{str(row.get('class_name','?')).upper()}** · {float(row.get('confidence',0)):.0%} · "
+                    f"{row.get('position_label','')} · {row.get('navigation_relevance','')} · "
+                    f"Distance: {row.get('distance','NOT AVAILABLE')}"
+                )
 
 with tabs[2]:
     st.markdown("### LIVE INPUT MANAGER")
@@ -284,10 +311,11 @@ with tabs[12]:
 |-----------|--------|
 | Classical Detector | ACTIVE |
 | Universal Video Input | IMPLEMENTED |
-| Experience Memory | IMPLEMENTED |
-| Human Review / Dataset | IMPLEMENTED |
+| Live Robotic Perception + narrative | IMPLEMENTED |
+| Experience Memory / Review / Dataset | IMPLEMENTED |
 | Training config | IMPLEMENTED (not executed) |
 | ARQTECH | SCAFFOLD |
+| Depth / meters | NOT AVAILABLE |
 | Python | {platform.python_version()} |
 """)
     st.caption("https://github.com/edu-moraess/vision-robotics-analysis-lab")
