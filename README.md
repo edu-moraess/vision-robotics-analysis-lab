@@ -103,6 +103,12 @@ YOLO remains optional:
 pip install -r requirements-yolo.txt
 ```
 
+YouTube Live / Twitch page-URL resolution is also optional (`src/input/resolver.py` degrades safely without it):
+
+```bash
+pip install -r requirements-ytdlp.txt
+```
+
 If a deployment intentionally omits PyTorch, the classical/YOLO/input portions can still be used, but ARQTECH modules will report unavailable rather than pretending to run. The standard requirements include PyTorch because the repository now contains a real, small training implementation.
 
 ## Groq configuration
@@ -188,7 +194,7 @@ The detection head is an architectural extension, not a claim that reviewed dete
 
 ## Deployment and dependencies
 
-`requirements.txt` is the deployable dependency list and includes the runtime packages used by the repository, the official `groq` SDK and supports the optional external YOLO baseline. It uses only the pinned server wheel `opencv-python-headless==5.0.0.93`, which avoids GUI dependencies in Streamlit Cloud. `requirements-yolo.txt` is an optional separate extra: install it only when the external YOLO baseline is needed, and never install both `opencv-python` and `opencv-python-headless` in the same environment because both provide the `cv2` namespace. `pyproject.toml` contains package metadata, test configuration and the same dependency intent without secrets. `.gitignore` excludes local environment files, credentials and secret/config directories.
+`requirements.txt` is the deployable dependency list and includes the runtime packages used by the repository, the official `groq` SDK and supports the optional external YOLO baseline. It uses only the pinned server wheel `opencv-python-headless==5.0.0.93`, which avoids GUI dependencies in Streamlit Cloud. `requirements-yolo.txt` is an optional separate extra: install it only when the external YOLO baseline is needed, and never install both `opencv-python` and `opencv-python-headless` in the same environment because both provide the `cv2` namespace. `requirements-ytdlp.txt` is an optional separate extra for resolving YouTube Live / Twitch page URLs; the resolver already degrades safely without it. `pyproject.toml` contains package metadata, test configuration and the same dependency intent without secrets. `.gitignore` excludes local environment files, credentials and secret/config directories.
 
 The application can run without a Groq key and can fall back when Ultralytics, model weights or PyTorch are unavailable. For Streamlit Community Cloud, choose Python 3.12 or another runtime explicitly supported by the selected dependency wheels in the deployment settings, then reboot the app after changing dependency files. The base Cloud deploy does not install Ultralytics; the app reports YOLO unavailable and safely keeps the current detector when the optional extra is absent. No credential is committed. For Streamlit deployment, configure `GROQ_API_KEY` and optionally `GROQ_MODEL` through Streamlit Secrets only.
 

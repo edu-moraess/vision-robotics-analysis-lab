@@ -37,7 +37,7 @@ class ARQTECHInference:
             self.load_error = f"checkpoint not found: {path}"
             return
         try:
-            payload = torch.load(path, map_location=self.device, weights_only=False)
+            payload = torch.load(path, map_location=self.device, weights_only=True)
             state = payload.get("state_dict") if isinstance(payload, dict) else payload
             self.model.load_state_dict(state, strict=False)
             self.model.eval()

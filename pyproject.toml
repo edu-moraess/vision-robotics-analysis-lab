@@ -27,6 +27,8 @@ test = ["pytest>=7.4.0"]
 
 yolo = ["ultralytics>=8.3.0"]
 
+ytdlp = ["yt-dlp>=2024.8.6"]
+
 [tool.setuptools]
 include-package-data = true
 

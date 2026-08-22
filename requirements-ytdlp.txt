@@ -1,0 +1,5 @@
+# Optional YouTube Live / Twitch resolution extra.
+# src/input/resolver.py imports yt_dlp lazily and already degrades safely
+# (returns "Platform/source not directly supported") when it is absent.
+# Install this only when resolving YouTube Live / Twitch page URLs is needed.
+yt-dlp>=2024.8.6

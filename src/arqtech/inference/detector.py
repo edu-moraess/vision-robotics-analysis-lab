@@ -19,7 +19,7 @@ class ArqtechDetector:
         if checkpoint_path and self.inference.loaded:
             try:
                 import torch
-                payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+                payload = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
                 self._metadata = dict(payload or {}) if isinstance(payload, dict) else {}
                 self.task = str(self._metadata.get("task", "unknown"))
             except Exception:

@@ -110,7 +110,7 @@ class ARQTECHV03DetectorAdapter:
             self.load_error = "checkpoint not found"
             return
         try:
-            payload = torch.load(str(checkpoint), map_location="cpu", weights_only=False)
+            payload = torch.load(str(checkpoint), map_location="cpu", weights_only=True)
             state = payload.get("model_state_dict", payload) if isinstance(payload, dict) else payload
             self.model.load_state_dict(state, strict=False)
             self._loaded = True

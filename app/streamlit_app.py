@@ -2,6 +2,7 @@
 from __future__ import annotations
 import io, sys, time, uuid, tempfile, re, json
 from pathlib import Path
+from typing import Optional
 import streamlit as st
 try:
     import cv2
@@ -286,6 +287,27 @@ with tabs[2]:
     diag = st.session_state.get("last_diag") or mgr.last_diagnostics
     st.caption(f"{diag.connection} · {diag.decoder} · {diag.message}")
 
+def _prune_stale_videos(tmp_dir: Path, keep_path: Optional[Path], max_age_s: float = 7200.0) -> None:
+    """Remove cached upload files the current session no longer needs.
+
+    Keeps the file backing the active video source (if any) and anything
+    younger than max_age_s; deletes the rest. Never raises — cleanup is
+    best-effort and must not break the video tab.
+    """
+    try:
+        now = time.time()
+        for f in tmp_dir.glob("*"):
+            try:
+                if keep_path is not None and f.resolve() == keep_path.resolve():
+                    continue
+                if now - f.stat().st_mtime > max_age_s:
+                    f.unlink(missing_ok=True)
+            except OSError:
+                continue
+    except OSError:
+        pass
+
+
 with tabs[3]:
     st.markdown("### RECORDED VIDEO LAB")
     st.caption("Mesmo pipeline do live. Preferir MP4 H.264.")
@@ -296,6 +318,7 @@ with tabs[3]:
         tmp_dir = Path(tempfile.gettempdir()) / "vral_videos"
         tmp_dir.mkdir(parents=True, exist_ok=True)
         tmp = tmp_dir / f"{up_vid.size}_{safe}"
+        _prune_stale_videos(tmp_dir, keep_path=tmp)
         if not tmp.exists() or tmp.stat().st_size != up_vid.size:
             tmp.write_bytes(up_vid.getbuffer())
         st.write(f"**Ficheiro:** `{up_vid.name}` · {up_vid.size} bytes")
