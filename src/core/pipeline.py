@@ -11,6 +11,7 @@ from ..vision.preprocessing import Preprocessor, PreprocessResult
 from ..vision.tracker import IoUTracker, Track
 from ..brain.risk_engine import RiskEngine, RiskAssessment
 from ..brain.decision_engine import DecisionEngine, SceneDecision
+from ..brain.uncertainty import UncertaintyEngine, UncertaintyReport
 from ..planning.image_planner import ImageSpacePlanner, ImagePlanResult
 from ..planning.occupancy import build_occupancy_from_mask, build_cost_map, OccupancyGrid
 from .timing import LatencyBreakdown, measure
@@ -33,12 +34,13 @@ class AnalysisResult:
     cost_map: Optional[np.ndarray] = None
     tracks: List[Track] = field(default_factory=list)
     tracking_active: bool = False
+    uncertainty: Optional[UncertaintyReport] = None
     latency: LatencyBreakdown = field(default_factory=LatencyBreakdown)
     notes: List[str] = field(default_factory=list)
 
     def metrics(self) -> Dict[str, Any]:
         avg_conf = float(np.mean([d.confidence for d in self.detections])) if self.detections else 0.0
-        return {
+        out = {
             "processing_time_ms": round(self.processing_time_ms, 2),
             "detection_count": len(self.detections),
             "average_confidence": round(avg_conf, 3),
@@ -51,8 +53,12 @@ class AnalysisResult:
             "decision": self.decision.action,
             "tracking_active": self.tracking_active,
             "track_count": len(self.tracks),
-            "latency": self.latency.to_dict(),
         }
+        if self.uncertainty is not None:
+            out["uncertainty_overall"] = round(self.uncertainty.overall, 3)
+        if self.latency is not None and hasattr(self.latency, "to_dict"):
+            out["latency_breakdown_ms"] = self.latency.to_dict()
+        return out
 
 class AnalysisPipeline:
     def __init__(self, min_area=80, conf_threshold=0.35, cell_size=16, max_image_side=1280, enable_tracking=False):
@@ -60,6 +66,7 @@ class AnalysisPipeline:
         self.detector = ClassicalDetector(min_area=min_area, conf_threshold=conf_threshold)
         self.scene_analyzer = SceneAnalyzer()
         self.risk_engine = RiskEngine()
+        self.uncertainty_engine = UncertaintyEngine()
         self.planner = ImageSpacePlanner(cell_size=cell_size)
         self.brain = DecisionEngine()
         self.tracker = IoUTracker() if enable_tracking else None
@@ -74,9 +81,9 @@ class AnalysisPipeline:
         t0 = time.perf_counter()
         lat = LatencyBreakdown()
         notes = [
-            "Pipeline: Preprocess → ClassicalDetector → Scene → Risk → Occupancy → Plan → Decision.",
+            "Pipeline: Preprocess → ClassicalDetector → Scene → Occupancy → Risk → Planner → Decision.",
             "Navigation path is hypothetical and image-space only.",
-            "No metric depth. No physical robot control.",
+            "Depth / YOLO / ROS 2 / physical control: not implemented.",
         ]
         if image_bgr is None or image_bgr.size == 0:
             raise ValueError("Empty or invalid image")
@@ -93,7 +100,7 @@ class AnalysisPipeline:
                 tracks = self.tracker.update(detections)
                 tracking_active = self.tracker.active
             else:
-                notes.append("Tracking disabled (static image mode or not enabled).")
+                notes.append("Tracking disabled (static image mode).")
         with measure("scene", lat):
             scene = self.scene_analyzer.analyze(work, detections)
         avg_conf = float(np.mean([d.confidence for d in detections])) if detections else 0.5
@@ -114,6 +121,15 @@ class AnalysisPipeline:
                 risk = self.risk_engine.assess(scene, path_available=plan.success if plan else False, avg_confidence=avg_conf)
         with measure("decision", lat):
             decision = self.brain.decide(scene.estimated_free_space_ratio, scene.obstacle_density, risk.level, plan.success if plan else False, scene.person_count)
+        with measure("uncertainty", lat):
+            unc = self.uncertainty_engine.assess(
+                detections=detections,
+                free_space_ratio=scene.estimated_free_space_ratio,
+                obstacle_density=scene.obstacle_density,
+                path_success=plan.success if plan else False,
+                path_nodes=plan.nodes_explored if plan else 0,
+                decision_confidence=decision.confidence,
+            )
         with measure("render", lat):
             annotated = annotate_detections(work, detections)
             free_overlay = overlay_free_space(work, scene.free_space_mask) if scene.free_space_mask is not None else work.copy()
@@ -121,4 +137,12 @@ class AnalysisPipeline:
             if plan and plan.path_px:
                 path_img = draw_path(path_img, plan.path_px)
         elapsed = (time.perf_counter() - t0) * 1000.0
-        return AnalysisResult(detections, scene, risk, plan, comparison, decision, annotated, free_overlay, path_img, elapsed, (h, w), prep, occupancy, cost_map, tracks, tracking_active, lat, notes)
+        return AnalysisResult(
+            detections=detections, scene=scene, risk=risk, plan=plan,
+            plan_comparison=comparison, decision=decision,
+            annotated_image=annotated, free_space_overlay=free_overlay,
+            path_overlay=path_img, processing_time_ms=elapsed, image_shape=(h, w),
+            preprocess=prep, occupancy=occupancy, cost_map=cost_map,
+            tracks=tracks, tracking_active=tracking_active,
+            uncertainty=unc, latency=lat, notes=notes,
+        )
