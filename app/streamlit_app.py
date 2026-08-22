@@ -42,6 +42,17 @@ def bgr_to_rgb(img):
     if img is None: return img
     return cv2.cvtColor(img, cv2.COLOR_GRAY2RGB) if img.ndim == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
+def _video_frame(vs, index: int = 0):
+    """Safe frame read — works even if seek_frame is missing on older deploys."""
+    try:
+        if hasattr(vs, "seek_frame"):
+            return vs.seek_frame(int(index))
+        if hasattr(vs, "read"):
+            return vs.read()
+    except Exception:
+        return None
+    return None
+
 @st.cache_resource
 def get_pipeline(min_area, conf, cell, tracking):
     return AnalysisPipeline(min_area=min_area, conf_threshold=conf, cell_size=cell, max_image_side=1280, enable_tracking=tracking)
@@ -209,7 +220,7 @@ with tabs[2]:
 
 with tabs[3]:
     st.markdown("### RECORDED VIDEO LAB")
-    st.caption("Mesmo pipeline do live. Vídeos de telemóvel HEVC podem falhar — use MP4 H.264.")
+    st.caption("Mesmo pipeline do live. Preferir MP4 H.264.")
     up_vid = st.file_uploader("Upload vídeo gravado", type=["mp4", "avi", "mov", "mkv", "webm", "m4v"], key="vid_up")
     sample_every = st.selectbox("Sample every N frames", [1, 2, 5, 10], index=1, key="vid_sample")
     if up_vid is not None:
@@ -236,34 +247,41 @@ with tabs[3]:
             st.session_state.video_report = None
             if not st_status.online:
                 st.error(st_status.message)
-                st.info("Dica: exportar como MP4 H.264 (não HEVC/H.265) ou analisar frames JPG.")
+                st.info("Dica: exportar como MP4 H.264 ou usar frames JPG.")
             else:
                 st.success("Vídeo aberto.")
-                pkt0 = vs.seek_frame(0)
-                if pkt0 is not None:
-                    r0 = get_pipeline(min_area, conf_thresh, cell_size, True).run(pkt0.image, run_planner=run_planner)
-                    st.session_state.result = r0
-                    st.session_state.original_bgr = pkt0.image
-                    st.session_state._last_vid_pkt = pkt0
+                pkt0 = _video_frame(vs, 0)
+                if pkt0 is not None and getattr(pkt0, "image", None) is not None:
+                    try:
+                        r0 = get_pipeline(min_area, conf_thresh, cell_size, True).run(pkt0.image, run_planner=run_planner)
+                        st.session_state.result = r0
+                        st.session_state.original_bgr = pkt0.image
+                        st.session_state._last_vid_pkt = pkt0
+                    except Exception as ex:
+                        st.warning(f"1º frame aberto, análise falhou: {ex}")
+                else:
+                    st.warning("Vídeo aberto, mas não foi possível ler o 1º frame. Use SHOW FRAME.")
         vs = st.session_state.get("video_src")
         if vs is None or not vs.is_available():
             st.warning("Fonte de vídeo indisponível.")
         else:
-            meta = vs.metadata()
-            st.json({k: meta[k] for k in ("filename", "format", "duration_s", "resolution", "source_fps", "frame_count", "file_size_bytes")})
-            max_f = meta["frame_count"] if isinstance(meta.get("frame_count"), int) and meta["frame_count"] > 0 else 1
+            meta = vs.metadata() if hasattr(vs, "metadata") else {}
+            st.json({k: meta.get(k) for k in ("filename", "format", "duration_s", "resolution", "source_fps", "frame_count", "file_size_bytes")})
+            max_f = meta.get("frame_count") if isinstance(meta.get("frame_count"), int) and meta.get("frame_count") > 0 else 1
             frame_idx = st.slider("Seek frame", 0, max(0, max_f - 1), 0, key="vid_seek")
             c1, c2, c3, c4 = st.columns(4)
             if c1.button("SHOW FRAME", key="vid_show"):
-                pkt = vs.seek_frame(frame_idx)
-                if pkt is None: st.error("Não foi possível ler este frame.")
+                pkt = _video_frame(vs, frame_idx)
+                if pkt is None or getattr(pkt, "image", None) is None:
+                    st.error("Não foi possível ler este frame.")
                 else:
                     r = get_pipeline(min_area, conf_thresh, cell_size, True).run(pkt.image, run_planner=run_planner)
                     st.session_state.result = r
                     st.session_state.original_bgr = pkt.image
                     st.session_state._last_vid_pkt = pkt
             if c2.button("CAPTURE EXPERIENCE", key="vid_cap"):
-                if st.session_state.result is None: st.warning("Analise um frame primeiro.")
+                if st.session_state.result is None:
+                    st.warning("Analise um frame primeiro.")
                 else:
                     pkt = st.session_state.get("_last_vid_pkt")
                     sample = st.session_state.experience_memory.store(
@@ -285,15 +303,15 @@ with tabs[3]:
                 analyzer = VideoAnalyzer(get_pipeline(min_area, conf_thresh, cell_size, True))
                 results, fids, tss, skipped = [], [], [], 0
                 t0 = time.perf_counter()
-                fps = meta["source_fps"] if isinstance(meta.get("source_fps"), (int, float)) and meta["source_fps"] else 25
-                n = meta["frame_count"] if isinstance(meta.get("frame_count"), int) else 0
+                fps = meta.get("source_fps") if isinstance(meta.get("source_fps"), (int, float)) and meta.get("source_fps") else 25
+                n = meta.get("frame_count") if isinstance(meta.get("frame_count"), int) else 0
                 for i in range(0, max(n, 1), int(sample_every)):
-                    pkt = vs.seek_frame(i)
-                    if pkt is None:
+                    pkt = _video_frame(vs, i)
+                    if pkt is None or getattr(pkt, "image", None) is None:
                         skipped += 1
                         continue
                     r = analyzer.analyze_frame(pkt.image, run_planner=run_planner)
-                    results.append(r); fids.append(pkt.frame_id); tss.append(i / float(fps) if fps else float(i))
+                    results.append(r); fids.append(getattr(pkt, "frame_id", i)); tss.append(i / float(fps) if fps else float(i))
                 if results:
                     st.session_state.result = results[-1]
                     st.session_state.original_bgr = results[-1].annotated_image
@@ -388,7 +406,7 @@ with tabs[13]:
 | Component | Status |
 |-----------|--------|
 | Classical Detector | ACTIVE |
-| Recorded Video Lab | FIXED (reopen + codec probe) |
+| Recorded Video Lab | FIXED (safe seek) |
 | ARQTECH | SCAFFOLD |
 | Python | {platform.python_version()} |
 """)
