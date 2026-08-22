@@ -1,6 +1,7 @@
-"""Image-space geometric utilities."""
+"""Image-space geometric utilities and GeometryEngine. Units: px / px² unless calibrated."""
 from __future__ import annotations
-from typing import Tuple
+from dataclasses import dataclass
+from typing import Any, List, Optional, Sequence, Tuple
 import cv2
 import numpy as np
 
@@ -25,3 +26,47 @@ def lower_roi(image, ratio=0.45):
     h = image.shape[0]
     y0 = int(h * (1.0 - ratio))
     return image[y0:, :], y0
+
+@dataclass
+class ObjectGeometry:
+    detection_id: Optional[int]
+    class_name: str
+    bbox: Tuple[int, int, int, int]
+    center: Tuple[float, float]
+    width_px: float
+    height_px: float
+    area_px2: float
+    aspect_ratio: float
+    perimeter_px: float
+    normalized_x: float
+    normalized_y: float
+    region: str
+
+    def to_dict(self):
+        return {
+            "id": self.detection_id, "class": self.class_name, "bbox": self.bbox,
+            "center": (round(self.center[0], 1), round(self.center[1], 1)),
+            "width_px": round(self.width_px, 1), "height_px": round(self.height_px, 1),
+            "area_px2": round(self.area_px2, 1), "aspect_ratio": round(self.aspect_ratio, 3),
+            "perimeter_px": round(self.perimeter_px, 1),
+            "normalized_x": round(self.normalized_x, 3), "normalized_y": round(self.normalized_y, 3),
+            "region": self.region, "unit": "pixel",
+        }
+
+class GeometryEngine:
+    def __init__(self, mode: str = "PIXEL"):
+        self.mode = mode
+
+    def analyze(self, detections: Sequence[Any], image_shape: Tuple[int, int]) -> List[ObjectGeometry]:
+        h, w = image_shape[:2]
+        results = []
+        for d in detections:
+            x1, y1, x2, y2 = d.bbox
+            bw = float(max(0, x2 - x1)); bh = float(max(0, y2 - y1))
+            nx = d.center[0] / max(w, 1); ny = d.center[1] / max(h, 1)
+            region = "left" if nx < 0.33 else ("right" if nx > 0.66 else "center")
+            results.append(ObjectGeometry(
+                getattr(d, "object_id", None), d.class_name, d.bbox, d.center,
+                bw, bh, bw * bh, bw / max(bh, 1e-6), 2.0 * (bw + bh), float(nx), float(ny), region,
+            ))
+        return results

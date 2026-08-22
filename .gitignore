@@ -13,3 +13,4 @@ build/
 .vscode/
 *.log
 .streamlit/secrets.toml
+data/
