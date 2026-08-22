@@ -1,0 +1,22 @@
+detector:
+  min_area: 80
+  conf_threshold: 0.35
+  nms_iou: 0.40
+  canny_low: 50
+  canny_high: 150
+
+scene:
+  lower_roi_ratio: 0.45
+  edge_threshold: 0.12
+
+risk:
+  low: 0.30
+  medium: 0.55
+  high: 0.75
+
+planning:
+  cell_size: 16
+  inflation: 1
+
+streamlit:
+  max_image_side: 1280
