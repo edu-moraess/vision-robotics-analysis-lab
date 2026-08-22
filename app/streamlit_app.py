@@ -12,7 +12,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.core.pipeline import AnalysisPipeline
-from src.camera import WebcamSource, IPCameraSource, SmartphoneCameraSource, VideoFileSource
+from src.camera import (
+    WebcamSource, IPCameraSource, SmartphoneCameraSource, VideoFileSource,
+    obtain_video_metadata,
+)
 from src.learning import ExperienceMemory, FrameCache
 from src.arqtech import ModelRegistry, describe_architecture
 from src.ml import DatasetBuilder, rank_for_review, LearningReportGenerator, TrainingConfig, save_training_config, inspect_manifest
@@ -43,7 +46,6 @@ def bgr_to_rgb(img):
     return cv2.cvtColor(img, cv2.COLOR_GRAY2RGB) if img.ndim == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 def _video_frame(vs, index: int = 0):
-    """Safe frame read — works even if seek_frame is missing on older deploys."""
     try:
         if hasattr(vs, "seek_frame"):
             return vs.seek_frame(int(index))
@@ -265,9 +267,16 @@ with tabs[3]:
         if vs is None or not vs.is_available():
             st.warning("Fonte de vídeo indisponível.")
         else:
-            meta = vs.metadata() if hasattr(vs, "metadata") else {}
-            st.json({k: meta.get(k) for k in ("filename", "format", "duration_s", "resolution", "source_fps", "frame_count", "file_size_bytes")})
-            max_f = meta.get("frame_count") if isinstance(meta.get("frame_count"), int) and meta.get("frame_count") > 0 else 1
+            # SAFE: never call vs.metadata() directly (AttributeError on old deploys)
+            meta = obtain_video_metadata(vs, filename=up_vid.name)
+            st.markdown("**VIDEO INFORMATION**")
+            st.caption(f"source_class={meta.get('source_class')} · metadata_source={meta.get('metadata_source')}")
+            st.json({k: meta.get(k) for k in (
+                "filename", "format", "duration_s", "resolution", "source_fps",
+                "frame_count", "file_size_bytes", "codec",
+            )})
+            fc = meta.get("frame_count")
+            max_f = fc if isinstance(fc, int) and fc > 0 else 1
             frame_idx = st.slider("Seek frame", 0, max(0, max_f - 1), 0, key="vid_seek")
             c1, c2, c3, c4 = st.columns(4)
             if c1.button("SHOW FRAME", key="vid_show"):
@@ -406,7 +415,7 @@ with tabs[13]:
 | Component | Status |
 |-----------|--------|
 | Classical Detector | ACTIVE |
-| Recorded Video Lab | FIXED (safe seek) |
+| Recorded Video Lab | FIXED (safe metadata) |
 | ARQTECH | SCAFFOLD |
 | Python | {platform.python_version()} |
 """)
