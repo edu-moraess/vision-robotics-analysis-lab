@@ -112,3 +112,47 @@ def test_baseline_comparison_is_measured_without_quality_claim():
     assert set(report["comparison"]) == {"CURRENT DETECTOR", "YOLO BASELINE"}
     assert report["methodology"].startswith("Same preprocessed frame")
     assert "inference_latency_ms" in report["comparison"]["CURRENT DETECTOR"]
+
+
+def test_orchestrator_fuses_same_class_and_preserves_sources():
+    from src.vision.orchestrator import PerceptionOrchestrator
+
+    class StubDetector:
+        identity = {
+            "model": "STUB",
+            "model_type": "TEST SOURCE",
+            "model_version": "1",
+            "weights": "none",
+        }
+        def detect(self, frame, timestamp=None, frame_id=None):
+            return [Detection("person", 0.9, (10, 10, 30, 30), (20, 20), source_model="STUB")]
+
+    class StubDetector2(StubDetector):
+        identity = {
+            "model": "STUB2",
+            "model_type": "TEST SOURCE",
+            "model_version": "1",
+            "weights": "none",
+        }
+        def detect(self, frame, timestamp=None, frame_id=None):
+            return [Detection("person", 0.8, (11, 11, 31, 31), (21, 21), source_model="STUB2")]
+
+    result = PerceptionOrchestrator({"a": StubDetector(), "b": StubDetector2()}).infer(np.zeros((40, 40, 3), dtype=np.uint8))
+    assert len(result.detections) == 1
+    assert result.detections[0].agreement_count == 2
+    assert set(result.detections[0].source_models) == {"STUB", "STUB2"}
+    assert result.fusion["merged_detections"] == 1
+
+
+def test_orchestrator_isolates_failed_source():
+    from src.vision.orchestrator import PerceptionOrchestrator
+
+    class Broken:
+        identity = {"model": "BROKEN", "model_type": "TEST", "model_version": "1", "weights": "none"}
+        def detect(self, frame, timestamp=None, frame_id=None):
+            raise RuntimeError("boom")
+
+    result = PerceptionOrchestrator({"broken": Broken()}).infer(np.zeros((8, 8, 3), dtype=np.uint8))
+    assert result.detections == []
+    assert result.evidence[0].status == "UNAVAILABLE"
+    assert result.evidence[0].error

@@ -17,12 +17,12 @@ from src.camera import (
     obtain_video_metadata,
 )
 from src.learning import ExperienceMemory, FrameCache
-from src.arqtech import ModelRegistry, describe_architecture
+from src.arqtech import ModelRegistry, describe_architecture, train_arqtech_v01
 from src.ml import DatasetBuilder, rank_for_review, LearningReportGenerator, TrainingConfig, save_training_config, inspect_manifest
 from src.input import InputManager, InputDescriptor, SourceType, SmartCapturePolicy, mask_url
 from src.vision.video_analysis import VideoAnalyzer
 from src.vision.perception_config import (
-    PERCEPTION_CURRENT, PERCEPTION_YOLO_BASELINE,
+    PERCEPTION_CURRENT, PERCEPTION_YOLO_BASELINE, PERCEPTION_FUSION,
     SMOOTHING_RAW, SMOOTHING_MOVING_AVERAGE, SMOOTHING_EXPONENTIAL,
 )
 
@@ -62,14 +62,15 @@ def _video_frame(vs, index: int = 0):
 @st.cache_resource
 def get_pipeline(min_area, conf, cell, tracking, perception_mode, model_path, iou_threshold,
                  device, image_size, max_detections, smoothing_enabled, smoothing_method,
-                 smoothing_window, smoothing_alpha):
+                 smoothing_window, smoothing_alpha, enable_groq, arqtech_checkpoint):
     return AnalysisPipeline(
         min_area=min_area, conf_threshold=conf, cell_size=cell, max_image_side=1280,
         enable_tracking=tracking, perception_mode=perception_mode, model_path=model_path,
         iou_threshold=iou_threshold, device=device, image_size=image_size,
         max_detections=max_detections, smoothing_enabled=smoothing_enabled,
         smoothing_method=smoothing_method, smoothing_window=smoothing_window,
-        smoothing_alpha=smoothing_alpha,
+        smoothing_alpha=smoothing_alpha, enable_groq=enable_groq,
+        arqtech_checkpoint=arqtech_checkpoint or None,
     )
 
 def result_provenance(result):
@@ -81,6 +82,7 @@ def result_provenance(result):
         "tracks": [t.to_dict() for t in (result.tracks or [])],
         "navigation_state": result.navigation_state,
         "events": list(result.track_events or []),
+        "external_analysis": result.groq_analysis if (result.groq_analysis or {}).get("status") == "SUCCESS" else None,
         "notes": list(result.notes or []),
     }
 
@@ -88,7 +90,8 @@ def pipeline_for(tracking: bool):
     return get_pipeline(
         min_area, conf_thresh, cell_size, tracking, perception_mode, model_path,
         iou_threshold, device, image_size, max_detections, smoothing_enabled,
-        smoothing_method, smoothing_window, smoothing_alpha,
+        smoothing_method, smoothing_window, smoothing_alpha, enable_groq,
+        arqtech_checkpoint,
     )
 
 with st.sidebar:
@@ -111,11 +114,12 @@ with st.sidebar:
         stop_cam = c2.button("STOP", use_container_width=True)
         reconnect_cam = st.button("RECONNECT", use_container_width=True)
     st.markdown("### PERCEPTION CONFIGURATION")
-    perception_mode = st.selectbox("Perception mode", [PERCEPTION_CURRENT, PERCEPTION_YOLO_BASELINE])
+    perception_mode = st.selectbox("Perception mode", [PERCEPTION_CURRENT, PERCEPTION_YOLO_BASELINE, PERCEPTION_FUSION, "ARQTECH_EXPERIMENTAL"])
     conf_thresh = st.slider("Confidence threshold", 0.10, 0.90, 0.35, 0.05)
     iou_threshold = st.slider("IoU threshold", 0.10, 0.90, 0.45, 0.05)
     min_area = st.slider("Min contour area (CURRENT only)", 20, 500, 80, 10)
-    model_path = st.text_input("YOLO weights", value="yolo11n.pt", help="Used only by YOLO_BASELINE; Ultralytics is optional.")
+    model_path = st.text_input("YOLO weights", value="yolo11n.pt", help="Used only by YOLO_BASELINE/FUSION; Ultralytics is optional.")
+    arqtech_checkpoint = st.text_input("ARQTECH checkpoint (detection only)", value="", help="Experimental. Classification checkpoints are not treated as detectors.")
     device = st.selectbox("Inference device", ["auto", "cpu", "cuda:0"])
     image_size = st.selectbox("YOLO image size", [320, 416, 512, 640, 768], index=3)
     max_detections = st.slider("Max detections", 1, 300, 100, 1)
@@ -124,6 +128,7 @@ with st.sidebar:
     smoothing_method = st.selectbox("Smoothing method", [SMOOTHING_RAW, SMOOTHING_MOVING_AVERAGE, SMOOTHING_EXPONENTIAL])
     smoothing_window = st.slider("Smoothing window", 1, 20, 5, 1)
     smoothing_alpha = st.slider("Exponential alpha", 0.05, 1.0, 0.35, 0.05)
+    enable_groq = st.checkbox("Enable Groq multimodal review", value=False, help="Requires GROQ_API_KEY in Streamlit Secrets; output is advisory, not ground truth.")
     run_planner = st.checkbox("Image-space planner", True)
     cell_size = st.slider("Grid cell (px)", 8, 32, 16, 4)
     show_path = st.checkbox("Navigation path", True)
@@ -183,10 +188,7 @@ if mode == "Live Camera":
             packet = st.session_state.camera.read()
             if packet is not None and packet.image is not None:
                 try:
-                    result = st.session_state._live_pipe.run(
-                        packet.image, run_planner=run_planner, timestamp=packet.timestamp,
-                        frame_id=packet.frame_id, source=packet.source,
-                    )
+                    result = st.session_state._live_pipe.run_packet(packet, run_planner=run_planner)
                     st.session_state.result = result; st.session_state.original_bgr = packet.image
                     st.session_state.fps = 1.0 / max(time.perf_counter() - t0, 1e-6)
                     st.session_state.frame_count += 1
@@ -202,10 +204,11 @@ s2.markdown("**PERCEPTION**  \n" + ("<span class='status-on'>● ACTIVE</span>" 
 model_label = (result.model_identity.get("model", "UNKNOWN") if result else perception_mode)
 model_status = "UNAVAILABLE" if result and result.model_identity.get("available") is False else "ACTIVE"
 s3.markdown(f"**MODEL**  \n<span class='status-on'>● {model_label} · {model_status}</span>", unsafe_allow_html=True)
-s4.markdown("**ARQTECH**  \n<span class='status-off'>○ SCAFFOLD</span>", unsafe_allow_html=True)
+arq_status = describe_architecture().get("status", "NOT TRAINED")
+s4.markdown(f"**ARQTECH**  \n<span class='status-off'>○ {arq_status}</span>", unsafe_allow_html=True)
 s5.markdown("**LEARN**  \n<span class='status-off'>○ LOOP</span>", unsafe_allow_html=True)
 
-tabs = st.tabs(["MISSION CONTROL", "LIVE", "VIDEO INPUT", "RECORDED VIDEO", "PERCEPTION", "SCENE", "NAVIGATION", "BRAIN", "REVIEW", "DATASET", "TRAINING", "ARQTECH", "DIAGNOSTICS", "SYSTEM", "BASELINE COMPARISON"])
+tabs = st.tabs(["MISSION CONTROL", "LIVE", "VIDEO INPUT", "RECORDED VIDEO", "PERCEPTION", "SCENE", "NAVIGATION", "BRAIN", "REVIEW", "DATASET", "TRAINING", "ARQTECH", "DIAGNOSTICS", "SYSTEM", "BASELINE COMPARISON", "GROQ"])
 
 with tabs[0]:
     if original_bgr is None: st.info("Upload an image or start a camera.")
@@ -306,10 +309,7 @@ with tabs[3]:
                 pkt0 = _video_frame(vs, 0)
                 if pkt0 is not None and getattr(pkt0, "image", None) is not None:
                     try:
-                        r0 = pipeline_for(True).run(
-                            pkt0.image, run_planner=run_planner, timestamp=pkt0.timestamp,
-                            frame_id=pkt0.frame_id, source=pkt0.source,
-                        )
+                        r0 = pipeline_for(True).run_packet(pkt0, run_planner=run_planner)
                         st.session_state.result = r0
                         st.session_state.original_bgr = pkt0.image
                         st.session_state._last_vid_pkt = pkt0
@@ -338,10 +338,7 @@ with tabs[3]:
                 if pkt is None or getattr(pkt, "image", None) is None:
                     st.error("Não foi possível ler este frame.")
                 else:
-                    r = pipeline_for(True).run(
-                        pkt.image, run_planner=run_planner, timestamp=pkt.timestamp,
-                        frame_id=pkt.frame_id, source=pkt.source,
-                    )
+                    r = pipeline_for(True).run_packet(pkt, run_planner=run_planner)
                     st.session_state.result = r
                     st.session_state.original_bgr = pkt.image
                     st.session_state._last_vid_pkt = pkt
@@ -377,7 +374,7 @@ with tabs[3]:
                         skipped += 1
                         continue
                     r = analyzer.analyze_frame(
-                        pkt.image, run_planner=run_planner, timestamp=pkt.timestamp,
+                        pkt.frame, run_planner=run_planner, timestamp=pkt.timestamp,
                         frame_id=pkt.frame_id, source=f"video:{meta.get('filename')}",
                     )
                     results.append(r); fids.append(getattr(pkt, "frame_id", i)); tss.append(i / float(fps) if fps else float(i))
@@ -464,16 +461,34 @@ with tabs[9]:
         except Exception as e: st.error(str(e))
 
 with tabs[10]:
-    st.warning("Config only — does NOT train.")
+    st.markdown("### ARQTECH PYTORCH TRAINING")
+    st.warning("Bootstrap training uses synthetic patch classification only. It does not create a production object detector.")
+    train_epochs = st.slider("Bootstrap epochs", 1, 20, 3, 1)
+    train_samples = st.slider("Synthetic samples", 64, 2000, 256, 64)
     if st.button("Save training config"):
-        cfg = TrainingConfig(experiment_id=f"exp_{uuid.uuid4().hex[:8]}", model_name="ARQTECH",
-                             training_mode="FROM_SCRATCH", dataset_id="none")
+        cfg = TrainingConfig(
+            experiment_id=f"exp_{uuid.uuid4().hex[:8]}", model_name="ARQTECH",
+            model_version="v0.2-modular", training_mode="FROM_SCRATCH",
+            dataset_id="synthetic_patches", epochs=train_epochs,
+            batch_size=32, input_resolution=(64, 64),
+            dataset_scope="SYNTHETIC_BOOTSTRAP_ONLY",
+            notes=["Configuration saved; training not started."],
+        )
         st.success(str(save_training_config(cfg)))
+    if st.button("RUN SYNTHETIC ARQTECH BOOTSTRAP"):
+        with st.spinner("Running PyTorch bootstrap…"):
+            train_result = train_arqtech_v01(
+                epochs=train_epochs, n_samples=train_samples,
+                out_dir="data/models/arqtech_v01",
+            )
+        st.json(train_result.to_dict())
+        st.success("Training finished with experimental status; no production detection claim was made.")
 
 with tabs[11]:
-    st.warning("ARQTECH SCAFFOLD — not trained.")
+    st.markdown("### ARQTECH MODEL REGISTRY")
     st.json(describe_architecture())
     st.dataframe(ModelRegistry().list_models(), use_container_width=True)
+    st.caption("ARQTECH checkpoints are scoped to their recorded task and lifecycle; classification bootstrap is not object detection.")
 
 with tabs[12]:
     if result is None: st.info("No analysis.")
@@ -500,7 +515,8 @@ with tabs[13]:
 | Temporal Smoothing | {(result.smoothing.get('method') if result else smoothing_method)} |
 | Calibration | {(result.calibration_status if result else 'NOT CALIBRATED')} |
 | Recorded Video Lab | ACTIVE |
-| ARQTECH | EXPERIMENTAL SCAFFOLD — NOT YOLO |
+| ARQTECH | {arq_status} — NOT YOLO |
+| Groq | {('ENABLED / ' + str((result.groq_analysis or {}).get('status', 'N/A')) if result and enable_groq else 'DISABLED')} |
 | Python | {platform.python_version()} |
 """)
     st.caption("YOLO is used as an external baseline and is not ARQTECH. Distances and velocities remain image-space until calibration is valid.")
@@ -519,3 +535,16 @@ with tabs[14]:
             st.json(comparison)
         except Exception as exc:
             st.error(f"Comparison failed: {exc}")
+
+with tabs[15]:
+    st.markdown("### GROQ MULTIMODAL REVIEW")
+    st.caption("Groq is an external multimodal analysis layer and is not ARQTECH. It is not YOLO, ground truth, a controller or a training label source.")
+    if result is None:
+        st.info("Analyze an image, camera frame or video frame first.")
+    else:
+        groq = result.groq_analysis or {}
+        if not groq:
+            st.info("Groq is disabled for this pipeline. Enable it in the sidebar and configure GROQ_API_KEY in Streamlit Secrets.")
+        else:
+            st.json(groq)
+            st.caption("Groq output is advisory and is not automatically fused into obstacles, geometry, navigation or labels.")

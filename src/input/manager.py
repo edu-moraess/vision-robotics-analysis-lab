@@ -94,13 +94,22 @@ class InputManager:
         self.source = None
         self.last_diagnostics = ConnectionDiagnostics("IDLE", "N/A", "disconnected")
 
-    def read_frame(self):
-        if self.source is None: return None
+    def read_packet(self) -> Optional[FramePacket]:
+        """Read one canonical packet without exposing source-specific details."""
+        if self.source is None:
+            return None
         pkt = self.source.read()
         if pkt is not None:
             self.buffer.push(pkt)
             return self.buffer.pop_latest()
         return None
+
+    def read_frame(self):
+        # Backward-compatible alias used by the existing UI.
+        return self.read_packet()
+
+    def buffer_stats(self) -> dict:
+        return self.buffer.stats().to_dict()
 
     def is_online(self):
         return self.source is not None and self.source.is_available()

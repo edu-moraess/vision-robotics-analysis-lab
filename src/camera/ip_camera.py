@@ -52,10 +52,18 @@ class IPCameraSource(CameraSource):
         self._last_ts = now
         self._frame_id += 1
         self._message = "online"
-        return FramePacket(image=frame, timestamp=now, frame_id=self._frame_id, source=f"ip:{self.url[:32]}")
+        return FramePacket(
+            image=frame, timestamp=now, frame_id=self._frame_id,
+            source=f"ip:{self.url[:32]}", fps=self._fps_ema,
+            metadata={"input_type": "IP_CAMERA_OR_RTSP", "url": self.url[:32]},
+        )
 
     def status(self) -> CameraStatus:
         res = None
         if self.is_available() and self._cap is not None:
             res = (int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-        return CameraStatus(online=self.is_available(), source=f"ip:{self.url[:40]}", message=self._message, resolution=res, measured_fps=self._fps_ema)
+        return CameraStatus(
+            online=self.is_available(), source=f"ip:{self.url[:40]}",
+            message=self._message, resolution=res, measured_fps=self._fps_ema,
+            metadata={"input_type": "IP_CAMERA_OR_RTSP", "url": self.url[:40]},
+        )

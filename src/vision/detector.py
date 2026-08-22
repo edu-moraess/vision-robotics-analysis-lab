@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 import cv2
@@ -24,6 +24,8 @@ class Detection:
     model_type: str = "EXISTING CLASSICAL DETECTOR"
     timestamp: Optional[float] = None
     frame_id: Optional[int] = None
+    source_models: Tuple[str, ...] = field(default_factory=tuple)
+    agreement_count: int = 1
 
     @property
     def width(self) -> int:
@@ -66,6 +68,8 @@ class Detection:
             "model_type": self.model_type,
             "timestamp": self.timestamp,
             "frame_id": self.frame_id,
+            "source_models": tuple(self.source_models or (self.source_model,)),
+            "agreement_count": int(self.agreement_count),
         }
 
 

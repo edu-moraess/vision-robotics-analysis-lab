@@ -6,6 +6,8 @@ from typing import Dict, Optional, Sequence
 
 PERCEPTION_CURRENT = "CURRENT"
 PERCEPTION_YOLO_BASELINE = "YOLO_BASELINE"
+PERCEPTION_FUSION = "FUSION"
+PERCEPTION_ARQTECH = "ARQTECH_EXPERIMENTAL"
 SMOOTHING_RAW = "RAW"
 SMOOTHING_MOVING_AVERAGE = "MOVING_AVERAGE"
 SMOOTHING_EXPONENTIAL = "EXPONENTIAL"
@@ -57,7 +59,7 @@ class PerceptionConfig:
 
     def normalized(self) -> "PerceptionConfig":
         mode = str(self.mode or PERCEPTION_CURRENT).upper()
-        if mode not in (PERCEPTION_CURRENT, PERCEPTION_YOLO_BASELINE):
+        if mode not in (PERCEPTION_CURRENT, PERCEPTION_YOLO_BASELINE, PERCEPTION_FUSION, PERCEPTION_ARQTECH):
             mode = PERCEPTION_CURRENT
         method = str(self.smoothing_method or SMOOTHING_RAW).upper()
         if method not in (SMOOTHING_RAW, SMOOTHING_MOVING_AVERAGE, SMOOTHING_EXPONENTIAL):
@@ -85,6 +87,20 @@ class PerceptionConfig:
         )
 
     def model_identity(self) -> dict:
+        if self.mode == PERCEPTION_ARQTECH:
+            return {
+                "model": "ARQTECH",
+                "model_type": "EXPERIMENTAL PYTORCH MODEL",
+                "model_version": "UNAVAILABLE",
+                "weights": "NONE",
+            }
+        if self.mode == PERCEPTION_FUSION:
+            return {
+                "model": "PERCEPTION FUSION",
+                "model_type": "MULTI-SOURCE EVIDENCE",
+                "model_version": "RUNTIME",
+                "weights": "SOURCE-SPECIFIC",
+            }
         if self.mode == PERCEPTION_YOLO_BASELINE:
             return {
                 "model": "YOLO",

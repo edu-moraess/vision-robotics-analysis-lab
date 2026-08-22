@@ -45,3 +45,25 @@ def test_smart_capture_cooldown():
     st = SmartCaptureState()
     assert should_capture(pol, st, [], uncertainty=0.9) is True
     assert should_capture(pol, st, [], uncertainty=0.9) is False
+
+
+def test_dataset_uses_human_annotation_for_corrected_sample():
+    import json
+    import cv2
+    root = Path(tempfile.mkdtemp())
+    image_path = root / "sample.jpg"
+    cv2.imwrite(str(image_path), np.zeros((8, 8, 3), dtype=np.uint8))
+    sample = {
+        "sample_id": "sample-1",
+        "review_status": "corrected",
+        "image_path": str(image_path),
+        "camera_source": "test",
+        "detections": [{"class": "person", "confidence": 0.5}],
+        "human_annotation": [{"class": "chair", "confidence": 1.0}],
+    }
+    manifest = DatasetBuilder(root=str(root / "datasets")).build_from_experiences(
+        [sample], train_ratio=1.0, val_ratio=0.0, test_ratio=0.0,
+    )
+    label = json.loads((root / "datasets" / manifest.dataset_id / "labels" / "sample-1.json").read_text())
+    assert label["detections"][0]["class"] == "chair"
+    assert label["model_prediction"][0]["class"] == "person"

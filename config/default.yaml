@@ -32,6 +32,36 @@ perception:
     barrier: CRITICAL
     dynamic: HIGH
 
+input:
+  frame_buffer_capacity: 3
+  drop_policy: LATEST_FRAME
+  metadata_fields:
+    - frame_id
+    - timestamp
+    - source
+    - resolution
+    - fps
+    - metadata
+
+arqtech:
+  model_version: v0.2-modular
+  status: NOT TRAINED
+  checkpoint: ""
+  framework: PyTorch
+  task: patch_classification_bootstrap
+  detection_status: NOT AVAILABLE WITHOUT REVIEWED DETECTION CHECKPOINT
+  dataset_scope: HUMAN_REVIEW_REQUIRED
+
+groq:
+  enabled: false
+  model: qwen/qwen3.6-27b
+  timeout_s: 20
+  retries: 1
+  max_completion_tokens: 512
+  secret: GROQ_API_KEY
+  role: EXTERNAL MULTIMODAL ANALYSIS LAYER
+  ground_truth: false
+
 detector:
   min_area: 80
   conf_threshold: 0.35

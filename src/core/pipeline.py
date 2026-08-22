@@ -18,9 +18,12 @@ from ..vision.perception_config import (
     DEFAULT_CLASS_MAPPING,
     PERCEPTION_CURRENT,
     PERCEPTION_YOLO_BASELINE,
+    PERCEPTION_FUSION,
+    PERCEPTION_ARQTECH,
     PerceptionConfig,
 )
 from ..vision.yolo_adapter import YoloDetector
+from ..vision.orchestrator import PerceptionOrchestrator, OrchestrationResult
 from ..planning.obstacle_fusion import fuse_obstacles, fusion_stats
 from ..brain.risk_engine import RiskEngine, RiskAssessment
 from ..brain.decision_engine import DecisionEngine, SceneDecision
@@ -31,6 +34,11 @@ from ..vision.navigation_relevance import enrich_detections
 from ..vision.scene_narrative import build_narrative, scene_inventory
 from ..robotics.world_model import WorldModel
 from ..robotics.navigation_state import NavigationController
+from ..integrations import GroqClient
+try:
+    from ..arqtech.inference import ArqtechDetector
+except Exception:
+    ArqtechDetector = None
 from .timing import LatencyBreakdown, measure
 
 
@@ -73,6 +81,9 @@ class AnalysisResult:
     timestamp: Optional[float] = None
     frame_id: Optional[int] = None
     source: str = "unknown"
+    perception_evidence: List[dict] = field(default_factory=list)
+    perception_fusion: dict = field(default_factory=dict)
+    groq_analysis: dict = field(default_factory=dict)
 
     def metrics(self) -> Dict[str, Any]:
         avg_conf = float(np.mean([d.confidence for d in self.detections])) if self.detections else 0.0
@@ -99,6 +110,9 @@ class AnalysisResult:
             "smoothing": self.smoothing,
             "telemetry": self.telemetry,
             "track_events": len(self.track_events),
+            "perception_evidence": len(self.perception_evidence),
+            "perception_fusion": self.perception_fusion,
+            "groq": self.groq_analysis,
         }
         if self.uncertainty is not None:
             out["uncertainty_overall"] = round(self.uncertainty.overall, 3)
@@ -119,7 +133,8 @@ class AnalysisPipeline:
                  classes=None, max_detections=100, tracker_type="IOU",
                  smoothing_enabled=False, smoothing_method="RAW",
                  smoothing_window=5, smoothing_alpha=0.35, class_mapping=None,
-                 calibration_status="NOT CALIBRATED"):
+                 calibration_status="NOT CALIBRATED", enable_groq=False, groq_client=None,
+                 arqtech_checkpoint=None):
         mapping = dict(DEFAULT_CLASS_MAPPING) if class_mapping is None else dict(class_mapping)
         self.config = PerceptionConfig(
             mode=perception_mode,
@@ -143,12 +158,14 @@ class AnalysisPipeline:
         self.current_detector = ClassicalDetector(min_area=min_area, conf_threshold=self.config.confidence_threshold)
         self.detector = self.current_detector  # compatibility for callers using the old attribute
         self.yolo_detector = None
+        self.arqtech_detector = None
+        self.arqtech_status = "NOT CONFIGURED"
         self.active_detector = self.current_detector
         self.model_identity = self.current_detector.identity
         self.requested_model_identity = self.config.model_identity()
         self.detector_status = "AVAILABLE"
         self.detector_error = ""
-        if self.config.mode == PERCEPTION_YOLO_BASELINE:
+        if self.config.mode in (PERCEPTION_YOLO_BASELINE, PERCEPTION_FUSION):
             self.yolo_detector = YoloDetector(
                 model_path=self.config.model_path,
                 conf_threshold=self.config.confidence_threshold,
@@ -159,11 +176,37 @@ class AnalysisPipeline:
                 max_detections=self.config.max_detections,
             )
             if self.yolo_detector.available:
-                self.active_detector = self.yolo_detector
-                self.model_identity = self.yolo_detector.identity
+                if self.config.mode == PERCEPTION_YOLO_BASELINE:
+                    self.active_detector = self.yolo_detector
+                    self.model_identity = self.yolo_detector.identity
+                elif self.config.mode == PERCEPTION_FUSION:
+                    self.model_identity = self.config.model_identity()
             else:
                 self.detector_status = "UNAVAILABLE"
                 self.detector_error = self.yolo_detector.error or "Ultralytics/model unavailable"
+        if self.config.mode in (PERCEPTION_ARQTECH, PERCEPTION_FUSION) and arqtech_checkpoint and ArqtechDetector is not None:
+            self.arqtech_detector = ArqtechDetector(checkpoint_path=arqtech_checkpoint, device=self.config.device)
+            self.arqtech_status = "AVAILABLE" if self.arqtech_detector.available else "UNAVAILABLE"
+            if self.config.mode == PERCEPTION_ARQTECH and self.arqtech_detector.available:
+                self.active_detector = self.arqtech_detector
+                self.model_identity = self.arqtech_detector.identity
+        elif self.config.mode == PERCEPTION_ARQTECH:
+            self.arqtech_status = "UNAVAILABLE"
+        orchestrator_sources = {}
+        if self.config.mode == PERCEPTION_ARQTECH and self.arqtech_detector is not None and self.arqtech_detector.available:
+            orchestrator_sources["ARQTECH"] = self.arqtech_detector
+        elif self.config.mode == PERCEPTION_FUSION:
+            orchestrator_sources["CURRENT DETECTOR"] = self.current_detector
+            if self.yolo_detector is not None and self.yolo_detector.available:
+                orchestrator_sources["YOLO"] = self.yolo_detector
+            if self.arqtech_detector is not None and self.arqtech_detector.available:
+                orchestrator_sources["ARQTECH"] = self.arqtech_detector
+        elif self.config.mode == PERCEPTION_YOLO_BASELINE and self.yolo_detector is not None and self.yolo_detector.available:
+            orchestrator_sources["YOLO"] = self.yolo_detector
+        else:
+            orchestrator_sources["CURRENT DETECTOR"] = self.current_detector
+        self.orchestrator = PerceptionOrchestrator(orchestrator_sources, fusion_iou_threshold=self.config.iou_threshold)
+        self.last_orchestration = OrchestrationResult([], [], {}, [])
         self.scene_analyzer = SceneAnalyzer()
         self.risk_engine = RiskEngine()
         self.uncertainty_engine = UncertaintyEngine()
@@ -186,6 +229,8 @@ class AnalysisPipeline:
         self.cell_size = cell_size
         self.nav_controller = NavigationController()
         self.last_dropped_frames = 0
+        self.groq_client = groq_client if groq_client is not None else (GroqClient() if enable_groq else None)
+        self.groq_enabled = bool(enable_groq)
 
     def reset_tracker(self):
         if self.tracker is not None:
@@ -194,17 +239,29 @@ class AnalysisPipeline:
         self.nav_controller.reset()
 
     def _detect(self, work, timestamp, frame_id, notes):
-        if self.config.mode == PERCEPTION_YOLO_BASELINE and self.yolo_detector is not None:
-            if not self.yolo_detector.available:
-                notes.append("YOLO BASELINE: UNAVAILABLE")
-                notes.append("Fallback: CURRENT DETECTOR")
-            else:
-                try:
-                    return self.yolo_detector.detect(work, timestamp=timestamp, frame_id=frame_id)
-                except Exception as exc:
-                    notes.append(f"YOLO inference unavailable: {type(exc).__name__}")
-                    notes.append("Fallback: CURRENT DETECTOR")
-        return self.current_detector.detect(work, timestamp=timestamp, frame_id=frame_id)
+        if self.config.mode in (PERCEPTION_YOLO_BASELINE, PERCEPTION_FUSION) and self.detector_status == "UNAVAILABLE":
+            notes.append("YOLO BASELINE: UNAVAILABLE")
+            notes.append("Fallback: CURRENT DETECTOR")
+        if self.config.mode == PERCEPTION_ARQTECH and self.arqtech_status != "AVAILABLE":
+            notes.append("ARQTECH: UNAVAILABLE FOR DETECTION")
+            notes.append("Fallback: CURRENT DETECTOR")
+        self.last_orchestration = self.orchestrator.infer(work, timestamp=timestamp, frame_id=frame_id)
+        notes.extend(self.last_orchestration.notes)
+        return list(self.last_orchestration.detections)
+
+    def run_packet(self, packet, run_planner: bool = True) -> AnalysisResult:
+        if packet is None or getattr(packet, "frame", None) is None:
+            raise ValueError("Empty or invalid FramePacket")
+        metadata = getattr(packet, "metadata", {}) or {}
+        return self.run(
+            packet.frame,
+            run_planner=run_planner,
+            timestamp=getattr(packet, "timestamp", None),
+            frame_id=getattr(packet, "frame_id", None),
+            source=getattr(packet, "source", "unknown"),
+            source_fps=getattr(packet, "fps", None),
+            dropped_frames=metadata.get("dropped_frames"),
+        )
 
     def compare_models(self, image_bgr: np.ndarray, timestamp: Optional[float] = None,
                        frame_id: Optional[int] = None) -> dict:
@@ -332,6 +389,19 @@ class AnalysisPipeline:
             )
         with measure("geometry", lat):
             geometries = GeometryEngine().analyze(detections, (h, w))
+        groq_analysis = {}
+        if self.groq_client is not None:
+            with measure("groq", lat):
+                groq_result = self.groq_client.analyze_image(
+                    work,
+                    prompt=(
+                        "Analyze this frame as an external multimodal assistant. Return JSON with "
+                        "scene_summary, ambiguous_objects, possible_classes and review_questions. "
+                        "Do not claim ground truth, metric distance, velocity, control authority or training labels."
+                    ),
+                    json_mode=True,
+                )
+            groq_analysis = groq_result.to_dict()
         with measure("render", lat):
             annotated = annotate_detections(work, detections)
             free_overlay = overlay_free_space(work, scene.free_space_mask) if scene.free_space_mask is not None else work.copy()
@@ -388,4 +458,7 @@ class AnalysisPipeline:
             smoothing=self.smoother.stats(),
             calibration_status=self.config.calibration_status,
             telemetry=telemetry, timestamp=timestamp, frame_id=frame_id, source=source,
+            perception_evidence=[e.to_dict() for e in self.last_orchestration.evidence],
+            perception_fusion=dict(self.last_orchestration.fusion),
+            groq_analysis=groq_analysis,
         )

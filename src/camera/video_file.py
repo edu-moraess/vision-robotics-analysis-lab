@@ -85,6 +85,26 @@ class VideoFileSource(CameraSource):
             self._paused = False
             self._message = "online"
 
+    def _packet_metadata(self) -> Dict[str, Any]:
+        return {
+            "input_type": "VIDEO_FILE",
+            "filename": PathLib(self.path).name,
+            "path": self.path,
+            "source_fps": self._file_fps or None,
+            "frame_count": self._frame_count or None,
+            "codec": "NOT AVAILABLE",
+        }
+
+    def _make_packet(self, frame, timestamp: Optional[float] = None) -> FramePacket:
+        return FramePacket(
+            image=frame,
+            timestamp=time.time() if timestamp is None else float(timestamp),
+            frame_id=self._frame_id,
+            source=f"video:{PathLib(self.path).name}",
+            fps=self._file_fps or self._fps_ema,
+            metadata=self._packet_metadata(),
+        )
+
     def seek_frame(self, frame_index: int) -> Optional[FramePacket]:
         if not self.is_available():
             return None
@@ -106,8 +126,7 @@ class VideoFileSource(CameraSource):
         self._frame_id = frame_index + 1
         self._last_frame = frame
         self._message = "online"
-        return FramePacket(image=frame, timestamp=time.time(), frame_id=self._frame_id,
-                           source=f"video:{PathLib(self.path).name}")
+        return self._make_packet(frame)
 
     def seek_ratio(self, ratio: float) -> Optional[FramePacket]:
         ratio = max(0.0, min(1.0, float(ratio)))
@@ -120,8 +139,7 @@ class VideoFileSource(CameraSource):
             return None
         if self._paused:
             if self._last_frame is not None:
-                return FramePacket(image=self._last_frame.copy(), timestamp=time.time(),
-                                   frame_id=self._frame_id, source=f"video:{PathLib(self.path).name}")
+                return self._make_packet(self._last_frame.copy())
             return None
         ok, frame = self._cap.read()
         if not ok or frame is None:
@@ -142,8 +160,7 @@ class VideoFileSource(CameraSource):
         self._frame_id += 1
         self._last_frame = frame
         self._message = "online"
-        return FramePacket(image=frame, timestamp=now, frame_id=self._frame_id,
-                           source=f"video:{PathLib(self.path).name}")
+        return self._make_packet(frame, timestamp=now)
 
     def metadata(self) -> Dict[str, Any]:
         p = PathLib(self.path)

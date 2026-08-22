@@ -62,9 +62,18 @@ class DatasetBuilder:
                     dest = ds_dir / "images" / f"{sid}.jpg"
                     if not dest.exists():
                         shutil.copy2(src_img, dest)
-                label = {"sample_id": sid, "review_status": e.get("review_status"),
-                         "detections": e.get("detections", []), "label_source": "HUMAN_VERIFIED",
-                         "model_prediction_kept": e.get("review_status") == "accepted"}
+                review_status = e.get("review_status")
+                human_annotation = e.get("human_annotation")
+                annotations = human_annotation if review_status == "corrected" and human_annotation else e.get("detections", [])
+                label = {
+                    "sample_id": sid,
+                    "review_status": review_status,
+                    "detections": annotations,
+                    "model_prediction": e.get("detections", []),
+                    "label_source": "HUMAN_VERIFIED",
+                    "model_prediction_kept": review_status == "accepted",
+                    "external_analysis": e.get("external_analysis"),
+                }
                 (ds_dir / "labels" / f"{sid}.json").write_text(json.dumps(label, indent=2), encoding="utf-8")
                 for d in e.get("detections") or []:
                     if isinstance(d, dict):

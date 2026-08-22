@@ -34,6 +34,7 @@ class ExperienceSample:
     tracks: List[dict] = field(default_factory=list)
     navigation_state: Optional[dict] = None
     events: List[dict] = field(default_factory=list)
+    external_analysis: Optional[dict] = None
     notes: List[str] = field(default_factory=list)
 
     def to_dict(self):
@@ -68,7 +69,7 @@ class ExperienceMemory:
               model_name="classical-cv-baseline", model_version="baseline",
               source_type="UNKNOWN", source_identifier="", frame_id=None,
               capture_reason="MANUAL", min_uncertainty=0.0, skip_duplicate_hash=True,
-              tracks=None, navigation_state=None, events=None, notes=None):
+              tracks=None, navigation_state=None, events=None, external_analysis=None, notes=None):
         if image is None or image.size == 0: return None
         if uncertainty_overall is not None and min_uncertainty > 0 and uncertainty_overall < min_uncertainty:
             return None
@@ -88,7 +89,7 @@ class ExperienceMemory:
             risk_level=str(risk_level), decision=str(decision),
             uncertainty_overall=uncertainty_overall, capture_reason=capture_reason, review_status="pending",
             tracks=list(tracks or []), navigation_state=navigation_state, events=list(events or []),
-            notes=list(notes or []),
+            external_analysis=external_analysis, notes=list(notes or []),
         )
         with self.index_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(sample.to_dict()) + "\n")
