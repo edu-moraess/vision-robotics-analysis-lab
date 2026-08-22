@@ -1,6 +1,6 @@
 """Vision Robotics Analysis Lab — Engineering Control Room UI."""
 from __future__ import annotations
-import io, sys, time
+import io, sys, time, uuid
 from pathlib import Path
 import cv2
 import numpy as np
@@ -16,6 +16,7 @@ from src.camera import WebcamSource, IPCameraSource, SmartphoneCameraSource, Vid
 from src.learning import ExperienceMemory, FrameCache
 from src.arqtech import ModelRegistry, ExperimentLog, describe_architecture
 from src.arqtech.detector_interface import select_backend
+from src.ml import DatasetBuilder, rank_for_review, LearningReportGenerator, TrainingConfig, save_training_config
 
 st.set_page_config(page_title="Vision Robotics Lab", page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""<style>
@@ -50,7 +51,7 @@ def get_pipeline(min_area, conf, cell, tracking):
 
 with st.sidebar:
     st.markdown("## VISION ROBOTICS LAB")
-    st.caption("Computer Vision · Robotics · Numerical Systems")
+    st.caption("Computer Vision · Robotics · ARQTECH Research")
     st.markdown("---")
     mode = st.radio("INPUT MODE", ["Image Analysis", "Live Camera"], index=0)
     uploaded = None
@@ -59,7 +60,7 @@ with st.sidebar:
     start_cam = stop_cam = reconnect_cam = False
     cam_src = "Webcam"
     if mode == "Image Analysis":
-        uploaded = st.file_uploader("Upload image", type=["jpg", "jpeg", "png", "webp", "bmp"], accept_multiple_files=False)
+        uploaded = st.file_uploader("Upload image", type=["jpg", "jpeg", "png", "webp", "bmp"])
     else:
         cam_src = st.selectbox("Camera source", ["Webcam", "Smartphone (network stream)", "IP / RTSP URL", "Video File"])
         if cam_src == "Webcam":
@@ -67,8 +68,6 @@ with st.sidebar:
         else:
             ph = "http://192.168.0.10:8080/video" if "Smartphone" in cam_src else ("/path/to/video.mp4" if "Video" in cam_src else "rtsp://...")
             ip_url = st.text_input("Stream URL / path", placeholder=ph)
-            if "Smartphone" in cam_src:
-                st.caption("Phone = sensor; PC runs inference.")
         c1, c2 = st.columns(2)
         start_cam = c1.button("START", use_container_width=True)
         stop_cam = c2.button("STOP", use_container_width=True)
@@ -81,11 +80,9 @@ with st.sidebar:
     cell_size = st.slider("Grid cell (px)", 8, 32, 16, 4)
     show_free = st.checkbox("Free-space overlay", True)
     show_path = st.checkbox("Navigation path", True)
-    show_stages = st.checkbox("Preprocess stages", False)
     st.markdown("---")
     analyze_btn = st.button("RUN ANALYSIS", type="primary", use_container_width=True)
-    model_pref = st.selectbox("Detector backend", ["classical", "arqtech"], index=0)
-    st.caption("ARQTECH falls back to Classical until a trained checkpoint exists.")
+    st.caption("ARQTECH scaffold — Classical CV is the active detector.")
 
 for key, default in [("result", None), ("original_bgr", None), ("last_file_id", None),
                      ("camera", None), ("live_running", False), ("fps", 0.0), ("frame_count", 0)]:
@@ -104,8 +101,7 @@ if mode == "Image Analysis" and uploaded is not None:
         if analyze_btn or (file_id != st.session_state.last_file_id):
             st.session_state.last_file_id = file_id
             with st.spinner("Pipeline running…"):
-                pipe = get_pipeline(min_area, conf_thresh, cell_size, False)
-                st.session_state.result = pipe.run(preview, run_planner=run_planner)
+                st.session_state.result = get_pipeline(min_area, conf_thresh, cell_size, False).run(preview, run_planner=run_planner)
             st.success(f"{uploaded.name} · {preview.shape[1]}×{preview.shape[0]}")
     except Exception as e:
         st.session_state.result = None
@@ -135,10 +131,10 @@ if mode == "Live Camera":
                 if not ip_url.strip(): raise ValueError("Provide smartphone stream URL.")
                 cam = SmartphoneCameraSource(url=ip_url.strip())
             elif "Video" in cam_src:
-                if not ip_url.strip(): raise ValueError("Provide a video file path.")
+                if not ip_url.strip(): raise ValueError("Provide video path.")
                 cam = VideoFileSource(path=ip_url.strip())
             else:
-                if not ip_url.strip(): raise ValueError("Provide a stream URL.")
+                if not ip_url.strip(): raise ValueError("Provide stream URL.")
                 cam = IPCameraSource(url=ip_url.strip())
             cam.start()
             st.session_state.camera = cam
@@ -177,33 +173,31 @@ result = st.session_state.result
 original_bgr = st.session_state.original_bgr
 
 st.markdown("# VISION ROBOTICS ANALYSIS LAB")
-st.markdown("Computer Engineering · Computer Vision · Robotics · ARQTECH Research")
 s1, s2, s3, s4, s5 = st.columns(5)
 cam_on = st.session_state.live_running
 s1.markdown("**CAMERA**  \n" + ("<span class='status-on'>● ONLINE</span>" if cam_on else "<span class='status-off'>○ OFFLINE</span>"), unsafe_allow_html=True)
 s2.markdown("**PERCEPTION**  \n" + ("<span class='status-on'>● ACTIVE</span>" if result else "<span class='status-off'>○ IDLE</span>"), unsafe_allow_html=True)
-s3.markdown("**TRACKING**  \n" + ("<span class='status-on'>● ACTIVE</span>" if result and result.tracking_active else "<span class='status-off'>○ N/A</span>"), unsafe_allow_html=True)
-s4.markdown("**MODEL**  \n<span class='status-on'>● CLASSICAL</span>", unsafe_allow_html=True)
-s5.markdown("**ARQTECH**  \n<span class='status-off'>○ SCAFFOLD</span>", unsafe_allow_html=True)
+s3.markdown("**MODEL**  \n<span class='status-on'>● CLASSICAL</span>", unsafe_allow_html=True)
+s4.markdown("**ARQTECH**  \n<span class='status-off'>○ SCAFFOLD</span>", unsafe_allow_html=True)
+s5.markdown("**TRAINING**  \n<span class='status-off'>○ IDLE</span>", unsafe_allow_html=True)
 
-tabs = st.tabs(["MISSION CONTROL", "LIVE / FRAME", "PERCEPTION", "SCENE", "NAVIGATION", "ROBOT BRAIN", "ARQTECH LAB", "DIAGNOSTICS", "SYSTEM"])
+tabs = st.tabs(["MISSION CONTROL", "LIVE", "PERCEPTION", "SCENE", "NAVIGATION", "BRAIN", "REVIEW", "DATASET", "TRAINING", "ARQTECH", "DIAGNOSTICS", "SYSTEM"])
 
 with tabs[0]:
     if original_bgr is None:
-        st.info("Upload an image or start a camera in the sidebar.")
+        st.info("Upload an image or start a camera.")
     else:
         left, right = st.columns(2)
-        left.image(bgr_to_rgb(original_bgr), caption="INPUT FRAME", use_container_width=True)
+        left.image(bgr_to_rgb(original_bgr), caption="INPUT", use_container_width=True)
         right.image(bgr_to_rgb(result.annotated_image if result else original_bgr), caption="ANNOTATED", use_container_width=True)
         if result is not None:
             m = result.metrics()
-            ks = st.columns(6)
+            ks = st.columns(5)
             ks[0].metric("OBJECTS", m["detection_count"])
             ks[1].metric("FREE SPACE", f"{m['free_space_ratio']*100:.1f}%")
             ks[2].metric("RISK", m["risk_level"])
             ks[3].metric("ACTION", m["decision"])
             ks[4].metric("LATENCY", f"{m['processing_time_ms']:.0f} ms")
-            ks[5].metric("FPS" if cam_on else "TRACKS", f"{st.session_state.fps:.1f}" if cam_on else m.get("track_count", 0))
             if st.button("STORE TO EXPERIENCE MEMORY"):
                 sample = st.session_state.experience_memory.store(
                     image=result.annotated_image, camera_source="streamlit",
@@ -213,27 +207,22 @@ with tabs[0]:
                     decision=result.decision.action,
                     uncertainty_overall=result.uncertainty.overall if result.uncertainty else None,
                 )
-                st.success(f"Stored {sample.sample_id}" if sample else "Skipped (duplicate/filtered).")
+                st.success(f"Stored {sample.sample_id}" if sample else "Skipped.")
 
 with tabs[1]:
-    st.markdown("### LIVE VISION")
-    if result is None: st.info("No frame analyzed.")
+    if result is None: st.info("No frame.")
     else: st.image(bgr_to_rgb(result.path_overlay if show_path else result.annotated_image), use_container_width=True)
 
 with tabs[2]:
-    st.markdown("### PERCEPTION")
-    if result is None or result.preprocess is None: st.info("No analysis yet.")
+    if result is None: st.info("No analysis.")
     else:
-        a, b = st.columns(2)
-        a.image(bgr_to_rgb(result.annotated_image), caption="DETECTIONS", use_container_width=True)
-        if result.detections: b.dataframe([d.to_dict() for d in result.detections], use_container_width=True)
+        st.image(bgr_to_rgb(result.annotated_image), use_container_width=True)
+        if result.detections: st.dataframe([d.to_dict() for d in result.detections], use_container_width=True)
         if getattr(result, "geometries", None):
-            st.markdown("**PIXEL GEOMETRY**")
             st.dataframe([g.to_dict() for g in result.geometries], use_container_width=True)
 
 with tabs[3]:
-    st.markdown("### SCENE")
-    if result is None: st.info("No analysis yet.")
+    if result is None: st.info("No analysis.")
     else:
         s = result.scene
         a,b,c,d = st.columns(4)
@@ -244,8 +233,7 @@ with tabs[3]:
             st.image(bgr_to_rgb(result.free_space_overlay), use_container_width=True)
 
 with tabs[4]:
-    st.markdown("### IMAGE-SPACE NAVIGATION")
-    if result is None: st.info("No analysis yet.")
+    if result is None: st.info("No analysis.")
     else:
         if show_path: st.image(bgr_to_rgb(result.path_overlay), use_container_width=True)
         if result.plan_comparison:
@@ -253,45 +241,90 @@ with tabs[4]:
                        "Time (ms)": round(p.execution_time_ms,2), "Nodes": p.nodes_explored} for p in result.plan_comparison])
 
 with tabs[5]:
-    st.markdown("### ROBOT BRAIN")
-    if result is None: st.info("No analysis yet.")
+    if result is None: st.info("No analysis.")
     else:
         dec, risk = result.decision, result.risk
         c1,c2,c3 = st.columns(3)
-        c1.metric("ACTION", dec.action); c2.metric("CONFIDENCE", f"{dec.confidence:.2f}"); c3.metric("RISK", risk.level)
-        st.markdown(f"**REASON**\n\n{dec.reason}")
+        c1.metric("ACTION", dec.action); c2.metric("CONF", f"{dec.confidence:.2f}"); c3.metric("RISK", risk.level)
+        st.markdown(dec.reason)
 
 with tabs[6]:
-    st.markdown("### ARQTECH LAB")
-    st.warning("ARQTECH is an experimental scaffold — NOT trained. No mAP claimed.")
-    st.json(describe_architecture())
-    reg = ModelRegistry()
-    st.markdown("**Model Registry**")
-    st.dataframe(reg.list_models(), use_container_width=True)
-    elog = ExperimentLog()
-    st.markdown("**Experiment Log**")
-    if st.button("Create planned experiment (no training)"):
-        rec = elog.create(title="Planned architecture exploration", notes=["No training executed."])
-        st.success(f"Created {rec.experiment_id}")
-    st.dataframe(elog.list_experiments(), use_container_width=True)
-    st.caption("Inference remains Classical CV until ARQTECH has a real ACTIVE checkpoint.")
+    st.markdown("### HUMAN REVIEW")
+    st.caption("Predictions are NOT ground truth until accepted/corrected.")
+    mem = st.session_state.experience_memory
+    samples = mem.list_samples(limit=100)
+    ranked = rank_for_review(samples, limit=20)
+    st.write(f"Pending prioritized: {len(ranked)} / {len(samples)}")
+    if ranked:
+        choice = st.selectbox("Sample", [r.get("sample_id") for r in ranked])
+        sel = next(r for r in ranked if r.get("sample_id") == choice)
+        st.json({k: sel[k] for k in sel if k not in ("detections",)})
+        if sel.get("detections"): st.dataframe(sel["detections"], use_container_width=True)
+        c1,c2,c3 = st.columns(3)
+        if c1.button("ACCEPT"): mem.set_review_status(choice, "accepted"); st.success("accepted")
+        if c2.button("REJECT"): mem.set_review_status(choice, "rejected"); st.warning("rejected")
+        if c3.button("CORRECT"): mem.set_review_status(choice, "corrected"); st.info("corrected")
+    else:
+        st.info("Store experiences from Mission Control first.")
 
 with tabs[7]:
-    st.markdown("### DIAGNOSTICS")
-    if result is None: st.info("No analysis yet.")
+    st.markdown("### DATASET LAB")
+    mem = st.session_state.experience_memory
+    approved = [s for s in mem.list_samples(500) if s.get("review_status") in ("accepted", "corrected")]
+    st.metric("Approved samples", len(approved))
+    builder = DatasetBuilder()
+    if st.button("Build new dataset version from approved"):
+        try:
+            man = builder.build_from_experiences(approved)
+            st.success(f"Created {man.dataset_id}"); st.json(man.to_dict())
+        except Exception as e:
+            st.error(str(e))
+    st.dataframe(builder.list_datasets(), use_container_width=True)
+
+with tabs[8]:
+    st.markdown("### TRAINING LAB")
+    st.warning("Save config does NOT train. Metrics remain NOT MEASURED until a real run.")
+    ds_ids = [d["dataset_id"] for d in DatasetBuilder().list_datasets()] or ["(none)"]
+    ds_sel = st.selectbox("Dataset", ds_ids)
+    mode_t = st.selectbox("Mode", ["BASELINE_INFERENCE", "FINE_TUNE", "FROM_SCRATCH"])
+    model_name = st.selectbox("Model", ["CLASSICAL", "YOLO", "ARQTECH"])
+    epochs = st.number_input("Epochs (planned)", 1, 500, 50)
+    if st.button("Save training config (does not train)"):
+        cfg = TrainingConfig(experiment_id=f"exp_{uuid.uuid4().hex[:8]}", model_name=model_name,
+                             training_mode=mode_t, dataset_id=ds_sel if ds_sel != "(none)" else "none", epochs=int(epochs))
+        path = save_training_config(cfg)
+        st.success(f"Saved {path}")
+        st.json({"status": "CONFIGURED_NOT_STARTED", "metrics": {}})
+
+with tabs[9]:
+    st.markdown("### ARQTECH LAB")
+    st.warning("ARQTECH is SCAFFOLD — not trained. No mAP claimed.")
+    st.json(describe_architecture())
+    reg = ModelRegistry()
+    st.dataframe(reg.list_models(), use_container_width=True)
+    if st.button("GENERATE LEARNING REPORT"):
+        gen = LearningReportGenerator()
+        rep = gen.generate(experience_samples=st.session_state.experience_memory.list_samples(200))
+        st.success(f"JSON: {rep.get('export_json')}")
+        st.json(rep)
+    st.caption("Inference remains Classical CV until ARQTECH has an ACTIVE checkpoint.")
+
+with tabs[10]:
+    if result is None: st.info("No analysis.")
     else:
         st.json(result.metrics())
         if result.latency is not None: st.json(result.latency.to_dict())
 
-with tabs[8]:
+with tabs[11]:
     import platform
     st.markdown(f"""
 | Component | Status |
 |-----------|--------|
-| Python / OpenCV / Streamlit | {platform.python_version()} / {cv2.__version__} / {st.__version__} |
 | Classical Detector | **ACTIVE** |
-| ARQTECH | **SCAFFOLD** (not trained) |
-| Experience Memory | IMPLEMENTED |
-| YOLO / Depth / ROS 2 | NOT AVAILABLE / FUTURE |
+| ARQTECH | **SCAFFOLD** |
+| Human Review / Dataset Builder | **IMPLEMENTED** |
+| Training config | **IMPLEMENTED** (not executed) |
+| YOLO / Depth / ROS 2 | FUTURE |
+| Python | {platform.python_version()} |
 """)
     st.caption("https://github.com/edu-moraess/vision-robotics-analysis-lab")
