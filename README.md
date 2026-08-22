@@ -1,49 +1,47 @@
 # Vision Robotics Analysis Lab
 
-**Computer Engineering · Computer Vision · Robotics · Numerical Systems**
+**Computer Vision · Robotics · Numerical Systems · Image-space Navigation**
 
-Engineering laboratory for monocular perception, image-space navigation and decision support.
+Engineering laboratory for monocular perception analysis and hypothetical image-space navigation.
 
 **Repository:** https://github.com/edu-moraess/vision-robotics-analysis-lab
 
 ---
 
-## Status matrix
+## Status matrix (honest)
 
 | Capability | Status |
 |------------|--------|
-| Classical detection | **IMPLEMENTED** |
-| Preprocessing stages (CLAHE, edges) | **IMPLEMENTED** |
-| Scene / free-space heuristics | **IMPLEMENTED** |
-| Image-space occupancy + cost map | **IMPLEMENTED** |
-| A* / Dijkstra (pixel grid) | **IMPLEMENTED** |
-| Risk engine (transparent weights) | **IMPLEMENTED** |
-| Decision engine (rule-based) | **IMPLEMENTED** |
-| Webcam / IP camera abstraction | **IMPLEMENTED** |
-| IoU tracker (temporal only) | **IMPLEMENTED** |
-| Latency breakdown (perf_counter) | **IMPLEMENTED** |
+| Classical object detection | **IMPLEMENTED** |
+| Preprocessing stages | **IMPLEMENTED** |
+| IoU tracker | **IMPLEMENTED** (live/temporal only) |
+| Scene / free-space heuristics | **IMPLEMENTED** (image-space) |
+| Occupancy grid + cost map | **IMPLEMENTED** (image-space) |
+| A* / Dijkstra | **IMPLEMENTED** (pixel paths) |
+| Risk engine | **IMPLEMENTED** |
+| Uncertainty engine | **IMPLEMENTED** (heuristic, not calibrated) |
+| Decision engine (Robot Brain) | **IMPLEMENTED** |
+| Latency breakdown | **IMPLEMENTED** |
+| Webcam / IP camera | **IMPLEMENTED** |
 | Streamlit engineering UI | **IMPLEMENTED** |
 | Metric depth | **NOT AVAILABLE** |
-| YOLO | **OPTIONAL / UNAVAILABLE** |
-| EKF / SLAM / ROS 2 / physical control | **FUTURE** |
+| YOLO | **NOT AVAILABLE** |
+| SLAM / EKF / ROS 2 | **FUTURE** |
 
-Navigation paths from RGB are **image-space estimates**. Risk scores are **heuristics**, not calibrated probabilities.
-
----
-
-## Architecture
-
-```
-CAMERA / IMAGE
-      ↓
-PREPROCESS → DETECTION → TRACKING (live)
-      ↓
-SCENE + FREE-SPACE → OCCUPANCY + COST MAP
-      ↓
-RISK + DECISION → A*/DIJKSTRA (pixels)
-```
+Navigation from a single RGB image is **image-space only**, not metric-world.
 
 ---
+
+## Pipeline
+
+```
+Image / Camera Frame
+  → Preprocess → ClassicalDetector → IoUTracker (live)
+  → SceneAnalyzer → OccupancyGrid + CostMap
+  → RiskEngine + UncertaintyEngine
+  → ImageSpacePlanner (A* / Dijkstra)
+  → DecisionEngine → Outputs
+```
 
 ## Install & run
 
@@ -54,13 +52,24 @@ pip install -r requirements.txt
 streamlit run app/streamlit_app.py
 ```
 
-Streamlit Cloud: main file `app/streamlit_app.py`. Live webcam is typically unavailable on Cloud — use Image Analysis mode.
+### Streamlit Cloud
+
+- Main file: `app/streamlit_app.py`
+- Login as repo owner
+- **Note:** Live webcam is usually unavailable on Cloud; use Image Analysis mode.
 
 ## Tests
 
 ```bash
 pytest tests/ -v
 ```
+
+## Limitations
+
+- Classical CV only
+- Heuristic free-space / risk / uncertainty
+- Pixel paths, not metric navigation
+- No depth, no physical robot control
 
 ## License
 
