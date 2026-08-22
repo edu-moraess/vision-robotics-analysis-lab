@@ -1,6 +1,6 @@
 """Vision Robotics Analysis Lab — Engineering Control Room UI."""
 from __future__ import annotations
-import io, sys, time, uuid
+import io, sys, time, uuid, tempfile, re
 from pathlib import Path
 import cv2
 import numpy as np
@@ -209,81 +209,112 @@ with tabs[2]:
 
 with tabs[3]:
     st.markdown("### RECORDED VIDEO LAB")
-    st.caption("Same FramePacket → AnalysisPipeline. No separate detector.")
-    up_vid = st.file_uploader("Upload video (mp4/avi/mov/mkv/webm)", type=["mp4", "avi", "mov", "mkv", "webm"], key="vid_up")
+    st.caption("Mesmo pipeline do live. Vídeos de telemóvel HEVC podem falhar — use MP4 H.264.")
+    up_vid = st.file_uploader("Upload vídeo gravado", type=["mp4", "avi", "mov", "mkv", "webm", "m4v"], key="vid_up")
     sample_every = st.selectbox("Sample every N frames", [1, 2, 5, 10], index=1, key="vid_sample")
     if up_vid is not None:
-        tmp = Path("data/experience") / f"upload_{up_vid.name}"
-        tmp.parent.mkdir(parents=True, exist_ok=True)
-        tmp.write_bytes(up_vid.getvalue())
-        if st.session_state.get("video_path") != str(tmp):
-            if st.session_state.get("video_src"):
+        safe = re.sub(r"[^\w.\-]+", "_", up_vid.name)
+        tmp_dir = Path(tempfile.gettempdir()) / "vral_videos"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        tmp = tmp_dir / f"{up_vid.size}_{safe}"
+        if not tmp.exists() or tmp.stat().st_size != up_vid.size:
+            tmp.write_bytes(up_vid.getbuffer())
+        st.write(f"**Ficheiro:** `{up_vid.name}` · {up_vid.size} bytes")
+        need_open = (
+            st.session_state.get("video_src") is None
+            or st.session_state.get("video_path") != str(tmp)
+            or not getattr(st.session_state.get("video_src"), "is_available", lambda: False)()
+        )
+        if need_open:
+            if st.session_state.get("video_src") is not None:
                 try: st.session_state.video_src.stop()
                 except Exception: pass
             vs = VideoFileSource(str(tmp), loop=False)
             st_status = vs.start()
             st.session_state.video_src = vs
             st.session_state.video_path = str(tmp)
-            if not st_status.online: st.error(st_status.message)
-        vs = st.session_state.video_src
-        meta = vs.metadata()
-        st.json({k: meta[k] for k in ("filename", "format", "duration_s", "resolution", "source_fps", "frame_count", "file_size_bytes")})
-        max_f = meta["frame_count"] if isinstance(meta.get("frame_count"), int) and meta["frame_count"] > 0 else 100
-        frame_idx = st.slider("Seek frame", 0, max(0, max_f - 1), 0, key="vid_seek")
-        c1, c2, c3, c4 = st.columns(4)
-        if c1.button("SHOW FRAME", key="vid_show"):
-            pkt = vs.seek_frame(frame_idx)
-            if pkt is not None:
-                r = get_pipeline(min_area, conf_thresh, cell_size, True).run(pkt.image, run_planner=run_planner)
-                st.session_state.result = r
-                st.session_state.original_bgr = pkt.image
-                st.session_state._last_vid_pkt = pkt
-        if c2.button("CAPTURE EXPERIENCE", key="vid_cap") and st.session_state.result is not None:
-            pkt = st.session_state.get("_last_vid_pkt")
-            sample = st.session_state.experience_memory.store(
-                image=st.session_state.result.annotated_image,
-                camera_source=f"video:{meta.get('filename')}",
-                detections=[d.to_dict() for d in st.session_state.result.detections],
-                free_space_ratio=st.session_state.result.scene.estimated_free_space_ratio,
-                risk_score=st.session_state.result.risk.score,
-                risk_level=st.session_state.result.risk.level,
-                decision=st.session_state.result.decision.action,
-                uncertainty_overall=st.session_state.result.uncertainty.overall if st.session_state.result.uncertainty else None,
-                capture_reason="MANUAL", source_type="RECORDED_VIDEO",
-                source_identifier=str(meta.get("filename")),
-                frame_id=pkt.frame_id if pkt else frame_idx,
-                model_name="classical-cv-baseline",
-            )
-            st.success(sample.experience_id if sample else "Skipped")
-        if c3.button("FAST SCAN (sampled)", key="vid_fast"):
-            analyzer = VideoAnalyzer(get_pipeline(min_area, conf_thresh, cell_size, True))
-            results, fids, tss, skipped = [], [], [], 0
-            t0 = time.perf_counter()
-            fps = meta["source_fps"] if isinstance(meta.get("source_fps"), (int, float)) and meta["source_fps"] else 25
-            n = meta["frame_count"] if isinstance(meta.get("frame_count"), int) else 0
-            for i in range(0, max(n, 1), int(sample_every)):
-                pkt = vs.seek_frame(i)
-                if pkt is None:
-                    skipped += 1
-                    continue
-                r = analyzer.analyze_frame(pkt.image, run_planner=run_planner)
-                results.append(r); fids.append(pkt.frame_id); tss.append(i / float(fps) if fps else float(i))
-            if results:
-                st.session_state.result = results[-1]
-                st.session_state.original_bgr = results[-1].annotated_image
-                st.session_state.video_report = analyzer.build_report(str(meta.get("filename")), results, fids, tss, skipped, time.perf_counter() - t0).to_dict()
-                st.success(f"Analyzed {len(results)} frames")
-        if c4.button("STOP VIDEO", key="vid_stop"):
-            vs.stop(); st.session_state.video_src = None
-        if st.session_state.result is not None and st.session_state.get("video_path") == str(tmp):
-            st.image(bgr_to_rgb(st.session_state.result.path_overlay if show_path else st.session_state.result.annotated_image), use_container_width=True)
-            for line in (st.session_state.result.narrative or [])[:6]:
-                st.write("• " + line)
-        if st.session_state.get("video_report"):
-            st.markdown("**VIDEO REPORT**")
-            st.json(st.session_state.video_report)
+            st.session_state.video_report = None
+            if not st_status.online:
+                st.error(st_status.message)
+                st.info("Dica: exportar como MP4 H.264 (não HEVC/H.265) ou analisar frames JPG.")
+            else:
+                st.success("Vídeo aberto.")
+                pkt0 = vs.seek_frame(0)
+                if pkt0 is not None:
+                    r0 = get_pipeline(min_area, conf_thresh, cell_size, True).run(pkt0.image, run_planner=run_planner)
+                    st.session_state.result = r0
+                    st.session_state.original_bgr = pkt0.image
+                    st.session_state._last_vid_pkt = pkt0
+        vs = st.session_state.get("video_src")
+        if vs is None or not vs.is_available():
+            st.warning("Fonte de vídeo indisponível.")
+        else:
+            meta = vs.metadata()
+            st.json({k: meta[k] for k in ("filename", "format", "duration_s", "resolution", "source_fps", "frame_count", "file_size_bytes")})
+            max_f = meta["frame_count"] if isinstance(meta.get("frame_count"), int) and meta["frame_count"] > 0 else 1
+            frame_idx = st.slider("Seek frame", 0, max(0, max_f - 1), 0, key="vid_seek")
+            c1, c2, c3, c4 = st.columns(4)
+            if c1.button("SHOW FRAME", key="vid_show"):
+                pkt = vs.seek_frame(frame_idx)
+                if pkt is None: st.error("Não foi possível ler este frame.")
+                else:
+                    r = get_pipeline(min_area, conf_thresh, cell_size, True).run(pkt.image, run_planner=run_planner)
+                    st.session_state.result = r
+                    st.session_state.original_bgr = pkt.image
+                    st.session_state._last_vid_pkt = pkt
+            if c2.button("CAPTURE EXPERIENCE", key="vid_cap"):
+                if st.session_state.result is None: st.warning("Analise um frame primeiro.")
+                else:
+                    pkt = st.session_state.get("_last_vid_pkt")
+                    sample = st.session_state.experience_memory.store(
+                        image=st.session_state.result.annotated_image,
+                        camera_source=f"video:{meta.get('filename')}",
+                        detections=[d.to_dict() for d in st.session_state.result.detections],
+                        free_space_ratio=st.session_state.result.scene.estimated_free_space_ratio,
+                        risk_score=st.session_state.result.risk.score,
+                        risk_level=st.session_state.result.risk.level,
+                        decision=st.session_state.result.decision.action,
+                        uncertainty_overall=st.session_state.result.uncertainty.overall if st.session_state.result.uncertainty else None,
+                        capture_reason="MANUAL", source_type="RECORDED_VIDEO",
+                        source_identifier=str(meta.get("filename")),
+                        frame_id=pkt.frame_id if pkt else frame_idx,
+                        model_name="classical-cv-baseline",
+                    )
+                    st.success(sample.experience_id if sample else "Skipped")
+            if c3.button("FAST SCAN", key="vid_fast"):
+                analyzer = VideoAnalyzer(get_pipeline(min_area, conf_thresh, cell_size, True))
+                results, fids, tss, skipped = [], [], [], 0
+                t0 = time.perf_counter()
+                fps = meta["source_fps"] if isinstance(meta.get("source_fps"), (int, float)) and meta["source_fps"] else 25
+                n = meta["frame_count"] if isinstance(meta.get("frame_count"), int) else 0
+                for i in range(0, max(n, 1), int(sample_every)):
+                    pkt = vs.seek_frame(i)
+                    if pkt is None:
+                        skipped += 1
+                        continue
+                    r = analyzer.analyze_frame(pkt.image, run_planner=run_planner)
+                    results.append(r); fids.append(pkt.frame_id); tss.append(i / float(fps) if fps else float(i))
+                if results:
+                    st.session_state.result = results[-1]
+                    st.session_state.original_bgr = results[-1].annotated_image
+                    st.session_state.video_report = analyzer.build_report(str(meta.get("filename")), results, fids, tss, skipped, time.perf_counter() - t0).to_dict()
+                    st.success(f"Analisados {len(results)} frames")
+                else:
+                    st.error("Nenhum frame analisado.")
+            if c4.button("STOP VIDEO", key="vid_stop"):
+                try: vs.stop()
+                except Exception: pass
+                st.session_state.video_src = None
+                st.session_state.video_path = None
+            if st.session_state.result is not None and st.session_state.get("video_path") == str(tmp):
+                st.image(bgr_to_rgb(st.session_state.result.path_overlay if show_path else st.session_state.result.annotated_image), use_container_width=True)
+                for line in (st.session_state.result.narrative or [])[:6]:
+                    st.write("• " + line)
+            if st.session_state.get("video_report"):
+                st.markdown("**VIDEO REPORT**")
+                st.json(st.session_state.video_report)
     else:
-        st.info("Upload MP4/AVI/MOV/MKV/WebM — same perception as live camera.")
+        st.info("Carregue MP4/AVI/MOV/MKV/WebM (preferir H.264).")
 
 with tabs[4]:
     if result is None: st.info("No analysis.")
@@ -336,7 +367,7 @@ with tabs[9]:
         except Exception as e: st.error(str(e))
 
 with tabs[10]:
-    st.warning("Config only — does NOT train. Metrics NOT MEASURED.")
+    st.warning("Config only — does NOT train.")
     if st.button("Save training config"):
         cfg = TrainingConfig(experiment_id=f"exp_{uuid.uuid4().hex[:8]}", model_name="ARQTECH",
                              training_mode="FROM_SCRATCH", dataset_id="none")
@@ -357,9 +388,7 @@ with tabs[13]:
 | Component | Status |
 |-----------|--------|
 | Classical Detector | ACTIVE |
-| Image / Live / Recorded Video | **ONE pipeline** |
-| RECORDED VIDEO LAB | IMPLEMENTED |
-| Experience Memory | IMPLEMENTED |
+| Recorded Video Lab | FIXED (reopen + codec probe) |
 | ARQTECH | SCAFFOLD |
 | Python | {platform.python_version()} |
 """)
