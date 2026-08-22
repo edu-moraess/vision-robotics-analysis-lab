@@ -1,0 +1,25 @@
+{
+  "experiment_id": "arqtech_v01_b897bee2",
+  "model_name": "ARQTECH",
+  "model_version": "v0.1",
+  "status": "TRAINED_EXPERIMENTAL",
+  "epochs_ran": 5,
+  "train_loss": [0.76296, 0.34467, 0.20237, 0.12274, 0.11433],
+  "val_loss": [1.41819, 1.41994, 1.03872, 0.06697, 0.08825],
+  "train_acc": [0.6875, 0.92083, 0.96875, 0.98542, 0.98125],
+  "val_acc": [0.23333, 0.23333, 0.48333, 1.0, 1.0],
+  "best_val_acc": 1.0,
+  "best_val_loss": 0.06697,
+  "parameters": 24356,
+  "device": "cpu",
+  "dataset": "synthetic_patches",
+  "dataset_size": 600,
+  "duration_s": 2.5,
+  "checkpoint_path": "data/models/arqtech_v01/arqtech_v01_b897bee2.pt",
+  "notes": [
+    "Real gradient descent executed.",
+    "Validation accuracy is on SYNTHETIC hold-out only.",
+    "Do not report as production mAP.",
+    "Next: train on human-reviewed Experience Memory samples."
+  ]
+}

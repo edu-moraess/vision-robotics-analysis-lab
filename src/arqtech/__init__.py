@@ -1,10 +1,14 @@
-"""ARQTECH — Autonomous Robotics Perception Architecture.\n\nScaffold only: not trained. No fabricated metrics.\n"""
-from .registry import ModelRegistry, ModelRecord, ModelStatus
-from .experiment_log import ExperimentLog, ExperimentRecord
-from .architecture import ArqtechConfig, describe_architecture
-
-__all__ = [
-    "ModelRegistry", "ModelRecord", "ModelStatus",
-    "ExperimentLog", "ExperimentRecord",
-    "ArqtechConfig", "describe_architecture",
-]
+"""ARQTECH experimental package."""
+from .architecture import describe_architecture
+from .registry import ModelRegistry
+from .experiment_log import ExperimentLog
+try:
+    from .train import train_arqtech_v01, TrainResult
+    from .model_v01 import ARQTechV01, CLASS_NAMES
+except Exception:
+    train_arqtech_v01 = None
+    TrainResult = None
+    ARQTechV01 = None
+    CLASS_NAMES = ["background", "obstacle", "wall", "person"]
+__all__ = ["describe_architecture", "ModelRegistry", "ExperimentLog",
+           "train_arqtech_v01", "TrainResult", "ARQTechV01", "CLASS_NAMES"]
