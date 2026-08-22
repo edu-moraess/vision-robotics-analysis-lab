@@ -8,6 +8,7 @@ from src.ml.dataset_builder import DatasetBuilder
 from src.ml.active_learning import rank_for_review
 from src.ml.report import LearningReportGenerator
 from src.ml.training_config import TrainingConfig, save_training_config
+from src.arqtech.registry import register_train_result, ModelRegistry
 
 def test_rank_for_review():
     samples = [
@@ -42,8 +43,24 @@ def test_dataset_builder_and_report():
     assert report["model_summary"]["metrics_not_measured"] or report["conclusion"]
     assert Path(report["export_json"]).exists()
 
+def test_registry_keeps_execution_fields_empty_until_supplied(tmp_path):
+    register_train_result({
+        "model_name": "ARQTECH", "model_version": "v0.3-detection-experimental",
+        "dataset_id": None, "status": "NOT TRAINED",
+    }, root=str(tmp_path))
+    row = ModelRegistry(root=str(tmp_path)).get("v0.3-detection-experimental")
+    assert row["train_loss"] is None
+    assert row["validation_loss"] is None
+    assert row["learning_rate"] is None
+    assert row["device"] is None
+    assert row["metrics"]["mAP@50"] is None
+
+
 def test_training_config_not_started():
     root = Path(tempfile.mkdtemp())
     cfg = TrainingConfig(experiment_id="exp_test", model_name="ARQTECH", training_mode="FROM_SCRATCH", dataset_id="dataset_v001")
     data = json.loads(save_training_config(cfg, root=str(root)).read_text())
-    assert data["status"] == "CONFIGURED_NOT_STARTED" and data["metrics"] == {}
+    assert data["status"] == "CONFIGURED_NOT_STARTED"
+    assert data["metrics"]["train_loss"] is None
+    assert data["metrics"]["validation_loss"] is None
+    assert data["metrics"]["mAP@50"] is None

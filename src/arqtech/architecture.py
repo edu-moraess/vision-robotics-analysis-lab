@@ -33,6 +33,11 @@ def describe_architecture(model_status: str = "NOT TRAINED", checkpoint_path: Op
         "framework": "PyTorch",
         "version": "v0.2-modular",
         "status": status,
+        "v02_scope": "Synthetic patch classification bootstrap",
+        "v03_scope": "REAL OBJECT DETECTION — EXPERIMENTAL / NOT TRAINED",
+        "v03_module": "src/arqtech/v03/detection.py",
+        "v03_dataset_requirement": "Human-reviewed real detection annotations are required",
+        "v03_metrics": "NOT MEASURED until a real evaluated dataset and predictions exist",
         "trained": trained,
         "checkpoint": checkpoint_path or "NOT AVAILABLE",
         "modules": {
@@ -49,6 +54,8 @@ def describe_architecture(model_status: str = "NOT TRAINED", checkpoint_path: Op
         "yolo_baseline": "OPTIONAL EXTERNAL NEURAL BASELINE — not ARQTECH",
         "groq_layer": "OPTIONAL EXTERNAL MULTIMODAL ANALYSIS — not ARQTECH",
         "limitations": [
+            "ARQTECH v0.2 is a synthetic patch classifier, not an object detector.",
+            "ARQTECH v0.3 detection is a scaffold marked EXPERIMENTAL / NOT TRAINED.",
             "No claim of production object detection.",
             "No claim of mAP, precision or recall without reviewed detection data.",
             "No automatic conversion of predictions into ground truth.",
@@ -59,6 +66,7 @@ def describe_architecture(model_status: str = "NOT TRAINED", checkpoint_path: Op
             "PHASE 3 — Experience Memory",
             "PHASE 4 — Active Learning + human review",
             "PHASE 5 — Modular ARQTECH architecture",
+            "PHASE 5.1 — v0.3 real detection scaffold",
             "PHASE 6 — From-scratch training",
             "PHASE 7 — Validation and registry",
             "PHASE 8 — Benchmarking vs external baseline",

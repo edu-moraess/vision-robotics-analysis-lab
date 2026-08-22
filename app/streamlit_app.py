@@ -1,6 +1,6 @@
 """Vision Robotics Analysis Lab — Engineering Control Room UI."""
 from __future__ import annotations
-import io, sys, time, uuid, tempfile, re
+import io, sys, time, uuid, tempfile, re, json
 from pathlib import Path
 import cv2
 import numpy as np
@@ -17,7 +17,7 @@ from src.camera import (
     obtain_video_metadata,
 )
 from src.learning import ExperienceMemory, FrameCache
-from src.arqtech import ModelRegistry, describe_architecture, train_arqtech_v01
+from src.arqtech import ModelRegistry, describe_architecture, train_arqtech_v01, LifecycleRecord, ARQTECH_LIFECYCLE
 from src.ml import DatasetBuilder, rank_for_review, LearningReportGenerator, TrainingConfig, save_training_config, inspect_manifest
 from src.input import InputManager, InputDescriptor, SourceType, SmartCapturePolicy, mask_url
 from src.vision.video_analysis import VideoAnalyzer
@@ -465,10 +465,34 @@ with tabs[8]:
     ranked = rank_for_review(mem.list_samples(100), limit=20)
     if ranked:
         choice = st.selectbox("Sample", [r.get("experience_id") or r.get("sample_id") for r in ranked])
-        c1,c2,c3 = st.columns(3)
-        if c1.button("ACCEPT"): mem.set_review_status(choice, "accepted")
-        if c2.button("REJECT"): mem.set_review_status(choice, "rejected")
-        if c3.button("CORRECT"): mem.set_review_status(choice, "corrected")
+        selected = mem.get(choice) or {}
+        st.image(selected.get("image_path"), caption="HUMAN REVIEW IMAGE", use_container_width=True) if selected.get("image_path") else None
+        st.json({
+            "model_prediction": selected.get("model_prediction", selected.get("detections", [])),
+            "groq_review": selected.get("external_analysis"),
+            "review_status": selected.get("review_status"),
+        })
+        annotation_text = st.text_area(
+            "Human annotation JSON",
+            value=json.dumps(selected.get("human_annotation") or selected.get("detections", []), indent=2),
+            key=f"annotation_{choice}", height=160,
+        )
+        try:
+            edited_annotations = json.loads(annotation_text)
+            if not isinstance(edited_annotations, list):
+                raise ValueError("Annotation must be a JSON list")
+            annotation_error = None
+        except Exception as exc:
+            edited_annotations, annotation_error = None, str(exc)
+        c1,c2,c3,c4,c5,c6 = st.columns(6)
+        if c1.button("ACCEPT", key=f"accept_{choice}"): mem.apply_review(choice, "ACCEPT", reviewer="streamlit")
+        if c2.button("EDIT", key=f"edit_{choice}") and edited_annotations is not None: mem.apply_review(choice, "EDIT", edited_annotations, reviewer="streamlit")
+        if c3.button("DELETE", key=f"delete_{choice}"): mem.apply_review(choice, "DELETE", reviewer="streamlit")
+        if c4.button("ADD OBJECT", key=f"add_{choice}") and edited_annotations is not None: mem.apply_review(choice, "ADD OBJECT", edited_annotations, reviewer="streamlit")
+        if c5.button("CHANGE CLASS", key=f"class_{choice}") and edited_annotations is not None: mem.apply_review(choice, "CHANGE CLASS", edited_annotations, reviewer="streamlit")
+        if c6.button("REJECT", key=f"reject_{choice}"): mem.apply_review(choice, "REJECT", reviewer="streamlit")
+        if annotation_error:
+            st.warning(f"Invalid annotation JSON: {annotation_error}")
     else: st.info("Store experiences first.")
 
 with tabs[9]:
@@ -484,7 +508,7 @@ with tabs[9]:
 
 with tabs[10]:
     st.markdown("### ARQTECH PYTORCH TRAINING")
-    st.warning("Bootstrap training uses synthetic patch classification only. It does not create a production object detector.")
+    st.warning("v0.2 BOOTSTRAP: synthetic patch classification only. It does not create a production object detector.")
     train_epochs = st.slider("Bootstrap epochs", 1, 20, 3, 1)
     train_samples = st.slider("Synthetic samples", 64, 2000, 256, 64)
     if st.button("Save training config"):
@@ -505,12 +529,24 @@ with tabs[10]:
             )
         st.json(train_result.to_dict())
         st.success("Training finished with experimental status; no production detection claim was made.")
+    st.divider()
+    st.markdown("### ARQTECH v0.3 — REAL OBJECT DETECTION")
+    st.error("EXPERIMENTAL / NOT TRAINED / NOT AVAILABLE")
+    st.json(LifecycleRecord().to_dict())
+    st.caption("A reviewed real dataset, detection training, validation, benchmark and an explicit active checkpoint are required. v0.2 classification checkpoints cannot be loaded as detectors.")
+    st.dataframe([{"lifecycle_status": status, "metrics": "NOT MEASURED"} for status in ARQTECH_LIFECYCLE], use_container_width=True)
 
 with tabs[11]:
     st.markdown("### ARQTECH MODEL REGISTRY")
-    st.json(describe_architecture())
+    architecture = describe_architecture()
+    st.json(architecture)
+    st.markdown("#### VERSION / SCOPE")
+    st.dataframe([
+        {"version": "v0.2-modular", "task": "SYNTHETIC PATCH CLASSIFICATION", "status": architecture.get("status", "NOT TRAINED"), "metrics": "bootstrap-only"},
+        {"version": "v0.3-detection-experimental", "task": "REAL OBJECT DETECTION", "status": "EXPERIMENTAL / NOT TRAINED", "metrics": "NOT MEASURED"},
+    ], use_container_width=True)
     st.dataframe(ModelRegistry().list_models(), use_container_width=True)
-    st.caption("ARQTECH checkpoints are scoped to their recorded task and lifecycle; classification bootstrap is not object detection.")
+    st.caption("ARQTECH checkpoints are scoped to their recorded task and lifecycle; classification bootstrap is not object detection. YOLO remains an external baseline.")
 
 with tabs[12]:
     if result is None: st.info("No analysis.")
@@ -570,15 +606,24 @@ with tabs[14]:
 with tabs[15]:
     st.markdown("### GROQ MULTIMODAL REVIEW")
     st.caption("Groq is an external multimodal analysis layer and is not ARQTECH. It is not YOLO, ground truth, a controller or a training label source.")
-    if result is None:
-        st.info("Analyze an image, camera frame or video frame first.")
+    groq_client = pipeline_for(False).groq_client if enable_groq else None
+    if groq_client is None:
+        st.info("GROQ NOT CONFIGURED / DISABLED. Enable it in the sidebar and configure GROQ_API_KEY in Streamlit Secrets.")
     else:
-        groq = result.groq_analysis or {}
-        if not groq:
-            st.info("Groq is disabled for this pipeline. Enable it in the sidebar and configure GROQ_API_KEY in Streamlit Secrets.")
-        else:
+        health_col, action_col = st.columns([2, 1])
+        with health_col:
+            st.json(groq_client.public_status())
+        with action_col:
+            if st.button("GROQ HEALTH CHECK", key="groq_health"):
+                st.json(groq_client.health_check(probe=True))
+        if result is not None:
+            groq = result.groq_analysis or {}
+            st.markdown("#### GROQ INTERPRETATION")
             st.json(groq)
-            st.caption("Groq output is advisory and is not automatically fused into obstacles, geometry, navigation or labels.")
+            st.caption("AI GENERATED · NOT GROUND TRUTH · EXTERNAL MULTIMODAL REVIEW")
+            st.markdown("#### DETECTOR OUTPUT")
+            st.dataframe([d.to_dict() for d in result.detections], use_container_width=True)
+
 
 with tabs[16]:
     st.markdown("### MOTION / TRAJECTORY")

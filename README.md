@@ -186,13 +186,44 @@ src/arqtech/inference/   Checkpoint loading and detector boundary
 
 The detection head is an architectural extension, not a claim that reviewed detection labels or detection postprocessing already exist. `ArqtechDetector` refuses to present a classification checkpoint as an object detector.
 
+## Deployment and dependencies
+
+`requirements.txt` is the deployable dependency list and includes the runtime packages used by the repository, the official `groq` SDK and `ultralytics` for the external YOLO baseline. `requirements-yolo.txt` remains as a compatibility extra for older deployment scripts. `pyproject.toml` contains package metadata, test configuration and the same dependency intent without secrets. `.gitignore` excludes local environment files, credentials and secret/config directories.
+
+The application can run without a Groq key and can fall back when Ultralytics, model weights or PyTorch are unavailable. No credential is committed. For Streamlit deployment, configure `GROQ_API_KEY` and optionally `GROQ_MODEL` through Streamlit Secrets only.
+
+## Groq health and safety
+
+The official Groq SDK is used for normal runtime calls. A compatibility HTTP path remains available for isolated tests and controlled fallback behavior. The public health status is one of `CONNECTED`, `NOT CONFIGURED`, `INVALID KEY`, `RATE LIMITED`, `ERROR` or `OFFLINE`; the UI exposes a non-destructive health check. Rate limits, timeout, latency and the last sanitized error are recorded without exposing the key.
+
+Groq output is always labeled `AI GENERATED` and `NOT GROUND TRUTH`. It is advisory multimodal interpretation only: it cannot override detector output, create labels, control a robot, measure depth/speed or activate ARQTECH.
+
+## Human review and dataset versioning
+
+Experience Memory preserves the original `model_prediction` separately from `human_annotation`. The REVIEW panel supports `ACCEPT`, `EDIT`, `DELETE`, `ADD OBJECT`, `CHANGE CLASS` and `REJECT`, with reviewer, timestamp, action and provenance in `review_history`. The JSON editor accepts only explicit human annotations; it never converts a prediction into a label automatically.
+
+Dataset versions are immutable. `DatasetBuilder` removes duplicate `image_hash` entries before splitting, groups samples by `session_id`/`source_identifier`/source, writes `groups.json`, stores split manifests and keeps the original prediction as provenance. Corrected samples use only `human_annotation` as their targets and labels are marked `HUMAN_VERIFIED`. A valid real detection loader additionally requires real images and numeric bounding boxes, so incomplete samples fail clearly instead of silently entering training.
+
+## ARQTECH v0.3 detection readiness
+
+ARQTECH v0.2 remains the implemented PyTorch synthetic patch-classification bootstrap. Its checkpoint is not an object detector. ARQTECH v0.3 is a separate `REAL OBJECT DETECTION` scaffold marked `EXPERIMENTAL / NOT TRAINED`; it includes raw detection-head contracts, an explicit activation gate and a reviewed-dataset loader, but no trained detection checkpoint or production post-processing claim.
+
+The intended lifecycle is:
+
+```text
+ARCHITECTURE → BOOTSTRAP → REAL DATASET → HUMAN REVIEW →
+DETECTION TRAINING → VALIDATION → BENCHMARK → PRODUCTION CANDIDATE
+```
+
+Training records contain epoch, train/validation loss, learning rate, duration, device and detection metric fields as `null` until a real execution writes them. The conditional evaluator returns `NOT MEASURED` without explicit evaluated predictions and ground truth. It measures only the supplied precision/recall/F1 at a declared IoU threshold; mAP remains `NOT MEASURED` in this scaffold.
+
 ## Tests
 
 ```bash
 pytest tests/ -v
 ```
 
-The suite covers input contracts, frame-buffer telemetry, detector normalization, YOLO fallback, perception fusion, tracking, smoothing, ARQTECH model forward/training/lifecycle, Groq disabled/success paths, Experience Memory, human-corrected dataset targets, video processing and existing navigation behavior.
+The suite covers input contracts, frame-buffer telemetry, detector normalization, YOLO fallback, perception fusion, tracking, smoothing, ARQTECH model forward/training/lifecycle, the v0.3 detection gate and reviewed dataset loader, conditional metrics, Groq disabled/success/error/rate-limit paths, Experience Memory review actions, grouped dataset versioning/deduplication, video processing and existing navigation behavior.
 
 ## Segmentation
 

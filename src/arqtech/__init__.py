@@ -2,6 +2,7 @@ from .architecture import describe_architecture
 from .registry import ModelRegistry
 from .status import ModelStatus, can_transition, transition
 from .experiment_log import ExperimentLog
+from .lifecycle import ARQTECH_LIFECYCLE, LifecycleRecord
 
 try:
     from .model import ARQTECHModel
@@ -20,5 +21,5 @@ __all__ = [
     "describe_architecture", "ModelRegistry", "ModelStatus",
     "can_transition", "transition", "ExperimentLog", "ARQTECHModel",
     "ARQTECHInference", "train_arqtech_v01", "TrainResult", "ARQTechV01",
-    "CLASS_NAMES",
+    "CLASS_NAMES", "ARQTECH_LIFECYCLE", "LifecycleRecord",
 ]

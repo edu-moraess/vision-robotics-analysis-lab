@@ -1,4 +1,5 @@
-numpy>=1.24.0
+# Runtime dependencies for Streamlit deployment
+numpy>=1.24
 opencv-python-headless>=4.8.0
 scipy>=1.11.0
 Pillow>=10.0.0
@@ -6,4 +7,8 @@ streamlit>=1.28.0
 PyYAML>=6.0
 requests>=2.31.0
 torch>=2.0.0
+groq>=0.11.0
+ultralytics>=8.3.0
+
+# Test dependency used by the repository test suite
 pytest>=7.4.0

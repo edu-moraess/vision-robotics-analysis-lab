@@ -1,2 +1,4 @@
-# Optional external neural baseline; the application runs without this package.
+# Compatibility extra for deployments that install YOLO separately.
+# ultralytics is also declared in requirements.txt because the current app exposes
+# the external YOLO baseline directly; keeping this file avoids breaking old setup scripts.
 ultralytics>=8.3.0

@@ -5,6 +5,12 @@ __pycache__/
 .venv/
 venv/
 .env
+.env.*
+secrets/
+credentials/
+*.secret
+*.secrets
+config/local.*
 *.egg-info/
 dist/
 build/

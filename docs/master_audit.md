@@ -69,3 +69,18 @@ The repository keeps explicit `NOT AVAILABLE`, `NOT TRAINED`, `EXPERIMENTAL` and
 ### Remaining limitations
 
 No metric depth, real-world distance, km/h velocity, 3D reconstruction, LiDAR, radar, SLAM, ROS control or production ARQTECH object detector was introduced. The current segmentation provider is contour-based, the motion predictor is constant velocity, occupancy is projected to image-space, and robot simulation is not physical control. A real regression video was not available in the repository for an before/after benchmark; therefore no mAP, precision, recall, FPS improvement or detector superiority is claimed.
+
+## Current-round audit — 2026-08-22
+
+| Area | Status | Evidence and limits |
+|---|---|---|
+| Deploy dependencies | IMPLEMENTED | `requirements.txt` now declares NumPy, official `groq` SDK and Ultralytics; `pyproject.toml` provides metadata/test config; no secret values are present. |
+| Groq official client | IMPLEMENTED / OPTIONAL | Normal runtime uses the official SDK; safe test fallback remains; statuses include `CONNECTED`, `NOT CONFIGURED`, `INVALID KEY`, `RATE LIMITED`, `ERROR` and `OFFLINE`. |
+| Human Review UI | IMPLEMENTED | REVIEW exposes image/provenance, editable human annotation JSON and ACCEPT/EDIT/DELETE/ADD OBJECT/CHANGE CLASS/REJECT actions. Actions are audited in `review_history`. |
+| Dataset grouping | IMPLEMENTED | Image-hash deduplication, source/session grouped splits, `groups.json`, immutable manifest and HUMAN_VERIFIED label provenance are validated by tests. |
+| ARQTECH v0.3 | SCAFFOLD ONLY | Raw PyTorch detection head, activation gate and real reviewed-dataset loader exist; status remains `EXPERIMENTAL / NOT TRAINED / NOT AVAILABLE`. No real dataset, checkpoint or detector postprocessor was fabricated. |
+| Lifecycle and metrics | IMPLEMENTED / CONDITIONAL | Training records expose epoch/loss/LR/duration/device/metric fields as null before execution. Conditional evaluation returns `NOT MEASURED` without explicit predictions and ground truth; mAP remains unimplemented. |
+| UI and docs | IMPLEMENTED | Training/ARQTECH panels distinguish v0.2 bootstrap from v0.3 detection and README documents dependencies, secrets, review, grouping and limitations. |
+| Validation | PASSED | Full pytest, Python compilation, TOML/import validation, `git diff --check`, secret-pattern scan and headless Streamlit health smoke were run in this round. |
+
+This round preserves the previous 96-test baseline and adds coverage for review actions, grouped dataset versioning, v0.3 dataset/model contracts, lifecycle records and conditional metrics. The final test count is recorded from the release command rather than inferred here.

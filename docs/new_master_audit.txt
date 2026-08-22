@@ -1,0 +1,444 @@
+=== HEAD ===
+[33m72bdbcf[m feat: add temporal robotics perception and simulation layers
+[31m??[m docs/new_master_audit.txt
+=== TOP LEVEL ===
+./.gitignore
+./.pytest_cache/.gitignore
+./.pytest_cache/CACHEDIR.TAG
+./.pytest_cache/README.md
+./LICENSE
+./README.md
+./app/streamlit_app.py
+./config/default.yaml
+./docs/architecture_classification.md
+./docs/arqtech.md
+./docs/groq_api_notes.md
+./docs/master_audit.md
+./docs/new_master_audit.txt
+./requirements-yolo.txt
+./requirements.txt
+./src/__init__.py
+./tests/test_arqtech.py
+./tests/test_camera_learning_geometry.py
+./tests/test_camera_occupancy.py
+./tests/test_experience_enriched.py
+./tests/test_experience_learning.py
+./tests/test_groq_integration.py
+./tests/test_input_layer.py
+./tests/test_ml_pipeline.py
+./tests/test_motion.py
+./tests/test_perception_upgrade.py
+./tests/test_pipeline.py
+./tests/test_scene_robotics.py
+./tests/test_segmentation.py
+./tests/test_simulation.py
+./tests/test_uncertainty_tracker.py
+./tests/test_video_analysis.py
+./tests/test_video_metadata.py
+./tests/test_world_model_cost.py
+./tests/test_yolo_baseline_tracking.py
+=== DEPENDENCIES ===
+numpy>=1.24.0
+opencv-python-headless>=4.8.0
+scipy>=1.11.0
+Pillow>=10.0.0
+streamlit>=1.28.0
+PyYAML>=6.0
+requests>=2.31.0
+torch>=2.0.0
+pytest>=7.4.0
+--- optional ---
+# Optional external neural baseline; the application runs without this package.
+ultralytics>=8.3.0
+=== TOML / STREAMLIT SECRETS ===
+=== GROQ API ===
+src/arqtech/architecture.py:50:        "groq_layer": "OPTIONAL EXTERNAL MULTIMODAL ANALYSIS — not ARQTECH",
+src/core/pipeline.py:92:    groq_analysis: dict = field(default_factory=dict)
+src/core/pipeline.py:128:            "groq": self.groq_analysis,
+src/core/pipeline.py:156:                 calibration_status="NOT CALIBRATED", enable_groq=False, groq_client=None,
+src/core/pipeline.py:182:        self.arqtech_status = "NOT CONFIGURED"
+src/core/pipeline.py:252:        self.groq_client = groq_client if groq_client is not None else (GroqClient() if enable_groq else None)
+src/core/pipeline.py:253:        self.groq_enabled = bool(enable_groq)
+src/core/pipeline.py:469:        groq_analysis = {}
+src/core/pipeline.py:470:        if self.groq_client is not None:
+src/core/pipeline.py:471:            with measure("groq", lat):
+src/core/pipeline.py:472:                groq_result = self.groq_client.analyze_image(
+src/core/pipeline.py:481:            groq_analysis = groq_result.to_dict()
+src/core/pipeline.py:568:            groq_analysis=groq_analysis,
+src/ml/report.py:67:                "groq": "EXTERNAL MULTIMODAL ANALYSIS / OPTIONAL",
+src/integrations/secrets.py:10:    def __init__(self, key_name: str = "GROQ_API_KEY"):
+src/integrations/groq_client.py:20:    base_url: str = "https://api.groq.com/openai/v1/chat/completions"
+src/integrations/groq_client.py:81:            "api_key": "CONFIGURED" if self.enabled else "NOT CONFIGURED",
+src/integrations/groq_client.py:93:                notes=["GROQ_API_KEY is not configured in Streamlit Secrets or the environment."],
+src/integrations/__init__.py:2:from .groq_client import GroqAnalysis, GroqClient, GroqConfig
+app/streamlit_app.py:65:                 smoothing_window, smoothing_alpha, enable_groq, arqtech_checkpoint):
+app/streamlit_app.py:72:        smoothing_alpha=smoothing_alpha, enable_groq=enable_groq,
+app/streamlit_app.py:85:        "external_analysis": result.groq_analysis if (result.groq_analysis or {}).get("status") == "SUCCESS" else None,
+app/streamlit_app.py:100:        smoothing_method, smoothing_window, smoothing_alpha, enable_groq,
+app/streamlit_app.py:138:    enable_groq = st.checkbox("Enable Groq multimodal review", value=False, help="Requires GROQ_API_KEY in Streamlit Secrets; output is advisory, not ground truth.")
+app/streamlit_app.py:545:| Groq | {('ENABLED / ' + str((result.groq_analysis or {}).get('status', 'N/A')) if result and enable_groq else 'DISABLED')} |
+app/streamlit_app.py:576:        groq = result.groq_analysis or {}
+app/streamlit_app.py:577:        if not groq:
+app/streamlit_app.py:578:            st.info("Groq is disabled for this pipeline. Enable it in the sidebar and configure GROQ_API_KEY in Streamlit Secrets.")
+app/streamlit_app.py:580:            st.json(groq)
+tests/test_groq_integration.py:8:from src.integrations.groq_client import GroqClient, GroqConfig
+tests/test_groq_integration.py:38:def test_groq_disabled_without_secret():
+tests/test_groq_integration.py:45:def test_groq_success_normalizes_json_and_keeps_secret_out_of_public_status():
+tests/test_groq_integration.py:60:def test_pipeline_keeps_groq_advisory_and_disabled():
+tests/test_groq_integration.py:63:    result = AnalysisPipeline(enable_groq=True, groq_client=client).run(
+tests/test_groq_integration.py:66:    assert result.groq_analysis["status"] == "DISABLED"
+tests/test_groq_integration.py:67:    assert result.metrics()["groq"]["status"] == "DISABLED"
+README.md:113:GROQ_API_KEY = "your-runtime-secret"
+README.md:223:[1]: https://console.groq.com/docs/vision "Groq Docs — Images and Vision"
+config/default.yaml:55:groq:
+config/default.yaml:61:  secret: GROQ_API_KEY
+config/default.yaml:80:  semantic_model: NOT CONFIGURED
+=== HUMAN REVIEW / DATASET ===
+src/arqtech/__init__.py:9:    from .train import train_arqtech_v01, TrainResult
+src/arqtech/__init__.py:14:    train_arqtech_v01 = None
+src/arqtech/__init__.py:22:    "ARQTECHInference", "train_arqtech_v01", "TrainResult", "ARQTechV01",
+src/arqtech/architecture.py:29:    trained = status in ("TRAINED", "TRAINED_EXPERIMENTAL", "VALIDATING", "VALIDATED", "ACTIVE")
+src/arqtech/architecture.py:36:        "trained": trained,
+src/arqtech/architecture.py:43:            "training": "src/arqtech/training/engine.py",
+src/arqtech/architecture.py:44:            "validation": "src/arqtech/validation/classification.py",
+src/arqtech/architecture.py:47:        "current_training_scope": "Synthetic patch classification bootstrap only",
+src/arqtech/architecture.py:62:            "PHASE 6 — From-scratch training",
+src/arqtech/detector_interface.py:53:        raise NotImplementedError("ARQTECH forward pass not implemented — no trained weights.")
+src/arqtech/experiment_log.py:14:    dataset_version: Optional[str]
+src/arqtech/experiment_log.py:33:               dataset_version=None, hyperparameters=None, hardware=None, notes=None):
+src/arqtech/experiment_log.py:37:            dataset_version=dataset_version, hyperparameters=hyperparameters or {},
+src/arqtech/experiment_log.py:39:            notes=notes or ["No training executed yet."],
+src/arqtech/experiment_log.py:49:        for line in self.index_path.read_text(encoding="utf-8").splitlines():
+src/arqtech/model_v01.py:10:# Backward-compatible name used by the original v0.1 training loop.
+src/arqtech/registry.py:27:            for line in self.path.read_text(encoding="utf-8").splitlines():
+src/arqtech/registry.py:86:def register_train_result(result: dict, root: str = "data/models") -> Path:
+src/arqtech/synthetic_data.py:1:"""Synthetic patch dataset for ARQTECH v0.1 bootstrap training."""
+src/arqtech/train.py:10:from torch.utils.data import DataLoader, random_split
+src/arqtech/train.py:13:from .registry import register_train_result
+src/arqtech/train.py:16:from .training.engine import fit_classification
+src/arqtech/train.py:26:    train_loss: List[float]
+src/arqtech/train.py:28:    train_acc: List[float]
+src/arqtech/train.py:45:def train_arqtech_v01(epochs=5, batch_size=32, lr=1e-3, n_samples=800, seed=42,
+src/arqtech/train.py:52:    train_ds, val_ds = random_split(
+src/arqtech/train.py:56:    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+src/arqtech/train.py:62:        train_loader=train_loader,
+src/arqtech/train.py:86:            "A checkpoint is not a validation claim.",
+src/arqtech/train.py:96:        train_loss=[round(x, 5) for x in fit.train_loss],
+src/arqtech/train.py:98:        train_acc=[round(x, 5) for x in fit.train_acc],
+src/arqtech/train.py:119:    register_train_result(result.to_dict(), root=registry_root or str(out.parent))
+src/arqtech/train.py:124:train_arqtech = train_arqtech_v01
+src/arqtech/train.py:128:    print(json.dumps(train_arqtech_v01(epochs=5).to_dict(), indent=2))
+src/arqtech/training/engine.py:14:    train_loss: List[float] = field(default_factory=list)
+src/arqtech/training/engine.py:16:    train_acc: List[float] = field(default_factory=list)
+src/arqtech/training/engine.py:26:            "train_loss": self.train_loss,
+src/arqtech/training/engine.py:28:            "train_acc": self.train_acc,
+src/arqtech/training/engine.py:39:    train_loader: DataLoader,
+src/arqtech/training/engine.py:50:        model.train()
+src/arqtech/training/engine.py:51:        train_loss, train_correct, train_total = 0.0, 0, 0
+src/arqtech/training/engine.py:52:        for x, y in train_loader:
+src/arqtech/training/engine.py:59:            train_loss += float(loss.item()) * x.size(0)
+src/arqtech/training/engine.py:60:            train_correct += int((logits.argmax(1) == y).sum().item())
+src/arqtech/training/engine.py:61:            train_total += int(x.size(0))
+src/arqtech/training/engine.py:62:        result.train_loss.append(train_loss / max(train_total, 1))
+src/arqtech/training/engine.py:63:        result.train_acc.append(train_correct / max(train_total, 1))
+src/arqtech/validation/classification.py:45:            "Classification validation only; lifecycle status is dataset-scoped.",
+src/core/pipeline.py:477:                        "Do not claim ground truth, metric distance, velocity, control authority or training labels."
+src/input/frame_buffer.py:44:    def pop_latest(self) -> Optional[FramePacket]:
+src/input/manager.py:40:    def test_connection(self, descriptor: InputDescriptor) -> ConnectionDiagnostics:
+src/input/manager.py:76:            return self.test_connection(descriptor)
+src/input/manager.py:104:            return self.buffer.pop_latest()
+src/learning/experience.py:26:    human_annotation: Optional[List[dict]]
+src/learning/experience.py:33:    review_status: str = "pending"
+src/learning/experience.py:71:        return any(h in line for line in self.index_path.read_text(encoding="utf-8").splitlines()[-300:])
+src/learning/experience.py:96:            detections=list(detections), model_prediction=list(detections), human_annotation=None,
+src/learning/experience.py:99:            uncertainty_overall=uncertainty_overall, capture_reason=capture_reason, review_status="pending",
+src/learning/experience.py:110:    def list_samples(self, limit=100, review_status=None):
+src/learning/experience.py:113:        for line in self.index_path.read_text(encoding="utf-8").splitlines():
+src/learning/experience.py:117:            if review_status and row.get("review_status") != review_status: continue
+src/learning/experience.py:127:    def set_review_status(self, experience_id, status, human_annotation=None, notes=None):
+src/learning/experience.py:131:        lines = self.index_path.read_text(encoding="utf-8").splitlines()
+src/learning/experience.py:139:                row["review_status"] = status
+src/learning/experience.py:140:                if human_annotation is not None: row["human_annotation"] = human_annotation
+src/learning/experience.py:155:            st = s.get("review_status", "pending")
+src/learning/experience.py:158:                "training_ready": counts["accepted"] + counts["corrected"]}
+src/learning/frame_cache.py:1:"""Rolling frame cache — temporary, NOT training data."""
+src/learning/frame_cache.py:26:    def latest(self) -> Optional[CachedFrame]:
+src/ml/__init__.py:4:from .training_config import TrainingConfig, save_training_config
+src/ml/__init__.py:7:           "LearningReportGenerator", "TrainingConfig", "save_training_config", "inspect_manifest"]
+src/ml/active_learning.py:8:        if s.get("review_status") not in (None, "pending"):
+src/ml/dataset_builder.py:15:    train_count: int
+src/ml/dataset_builder.py:16:    validation_count: int
+src/ml/dataset_builder.py:17:    test_count: int
+src/ml/dataset_builder.py:20:    split_seed: int
+src/ml/dataset_builder.py:31:        n = len(list(self.root.glob("dataset_v*"))) + 1
+src/ml/dataset_builder.py:32:        return f"dataset_v{n:03d}"
+src/ml/dataset_builder.py:34:    def build_from_experiences(self, experiences, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15, seed=42, dataset_id=None):
+src/ml/dataset_builder.py:35:        approved = [e for e in experiences if e.get("review_status") in ("accepted", "corrected")]
+src/ml/dataset_builder.py:38:        if abs(train_ratio + val_ratio + test_ratio - 1.0) > 1e-6:
+src/ml/dataset_builder.py:44:        for sub in ("images", "labels", "splits"):
+src/ml/dataset_builder.py:50:        n_train = max(1, int(n * train_ratio)) if n > 2 else n
+src/ml/dataset_builder.py:52:        train_items, val_items, test_items = items[:n_train], items[n_train:n_train+n_val], items[n_train+n_val:]
+src/ml/dataset_builder.py:55:        def _export(split_name, subset):
+src/ml/dataset_builder.py:65:                review_status = e.get("review_status")
+src/ml/dataset_builder.py:66:                human_annotation = e.get("human_annotation")
+src/ml/dataset_builder.py:67:                annotations = human_annotation if review_status == "corrected" and human_annotation else e.get("detections", [])
+src/ml/dataset_builder.py:70:                    "review_status": review_status,
+src/ml/dataset_builder.py:74:                    "model_prediction_kept": review_status == "accepted",
+src/ml/dataset_builder.py:84:            (ds_dir / "splits" / f"{split_name}.txt").write_text("\n".join(ids) + "\n", encoding="utf-8")
+src/ml/dataset_builder.py:86:        _export("train", train_items); _export("val", val_items); _export("test", test_items)
+src/ml/dataset_builder.py:90:            train_count=len(train_items), validation_count=len(val_items), test_count=len(test_items),
+src/ml/dataset_builder.py:91:            source_distribution=source_dist, annotation_status="HUMAN_VERIFIED", split_seed=seed,
+src/ml/dataset_builder.py:99:        for p in sorted(self.root.glob("dataset_v*/manifest.json")):
+src/ml/dataset_inspect.py:17:    if manifest.get("test_count", 0) == 0 and n > 2:
+src/ml/dataset_inspect.py:18:        warnings.append("Test split is empty.")
+src/ml/dataset_inspect.py:19:    if manifest.get("validation_count", 0) == 0 and n > 5:
+src/ml/dataset_inspect.py:20:        warnings.append("Validation split is empty.")
+src/ml/report.py:22:            for line in idx.read_text(encoding="utf-8").splitlines():
+src/ml/report.py:38:            status = sample.get("review_status", "pending")
+src/ml/report.py:51:                "trained": lifecycle_status in ("TRAINED", "VALIDATING", "VALIDATED", "ACTIVE"),
+src/ml/report.py:57:            "experience_memory": {"total_listed": len(exp), "review_status_counts": status_counts},
+src/ml/training_config.py:15:    training_mode: str
+src/ml/training_config.py:38:def save_training_config(cfg: TrainingConfig, root: str = "data/experiments") -> Path:
+src/vision/perception_config.py:24:    "train": "MEDIUM",
+app/streamlit_app.py:20:from src.arqtech import ModelRegistry, describe_architecture, train_arqtech_v01
+app/streamlit_app.py:21:from src.ml import DatasetBuilder, rank_for_review, LearningReportGenerator, TrainingConfig, save_training_config, inspect_manifest
+app/streamlit_app.py:32:div[data-testid="stMetricValue"] { font-size: 1.25rem; font-family: ui-monospace, monospace; }
+app/streamlit_app.py:275:        st.session_state.last_diag = mgr.test_connection(InputDescriptor(stype, ident))
+app/streamlit_app.py:464:    e.metric("Training-ready", summ["training_ready"])
+app/streamlit_app.py:469:        if c1.button("ACCEPT"): mem.set_review_status(choice, "accepted")
+app/streamlit_app.py:470:        if c2.button("REJECT"): mem.set_review_status(choice, "rejected")
+app/streamlit_app.py:471:        if c3.button("CORRECT"): mem.set_review_status(choice, "corrected")
+app/streamlit_app.py:476:    approved = [s for s in st.session_state.experience_memory.list_samples(500) if s.get("review_status") in ("accepted", "corrected")]
+app/streamlit_app.py:487:    st.warning("Bootstrap training uses synthetic patch classification only. It does not create a production object detector.")
+app/streamlit_app.py:488:    train_epochs = st.slider("Bootstrap epochs", 1, 20, 3, 1)
+app/streamlit_app.py:489:    train_samples = st.slider("Synthetic samples", 64, 2000, 256, 64)
+app/streamlit_app.py:490:    if st.button("Save training config"):
+app/streamlit_app.py:493:            model_version="v0.2-modular", training_mode="FROM_SCRATCH",
+app/streamlit_app.py:494:            dataset_id="synthetic_patches", epochs=train_epochs,
+app/streamlit_app.py:497:            notes=["Configuration saved; training not started."],
+app/streamlit_app.py:499:        st.success(str(save_training_config(cfg)))
+app/streamlit_app.py:502:            train_result = train_arqtech_v01(
+app/streamlit_app.py:503:                epochs=train_epochs, n_samples=train_samples,
+app/streamlit_app.py:506:        st.json(train_result.to_dict())
+app/streamlit_app.py:572:    st.caption("Groq is an external multimodal analysis layer and is not ARQTECH. It is not YOLO, ground truth, a controller or a training label source.")
+tests/test_arqtech.py:10:def test_describe_architecture():
+tests/test_arqtech.py:12:    assert d["trained"] is False
+tests/test_arqtech.py:14:def test_registry_baseline_active():
+tests/test_arqtech.py:19:def test_arqtech_backend_unavailable():
+tests/test_arqtech.py:28:def test_select_backend_falls_back():
+tests/test_arqtech.py:31:def test_classical_detects():
+tests/test_arqtech.py:34:def test_experiment_log():
+tests/test_arqtech.py:40:def test_arqtech_modular_model_forward_and_heads():
+tests/test_arqtech.py:53:def test_arqtech_lifecycle_transitions():
+tests/test_arqtech.py:60:def test_architecture_reports_pytorch_and_honest_scope():
+tests/test_arqtech.py:64:    assert description["trained"] is False
+tests/test_arqtech.py:65:    assert "Synthetic patch classification" in description["current_training_scope"]
+tests/test_arqtech.py:68:def test_arqtech_training_produces_experimental_checkpoint(tmp_path):
+tests/test_arqtech.py:69:    from src.arqtech.train import train_arqtech_v01
+tests/test_arqtech.py:70:    result = train_arqtech_v01(epochs=1, batch_size=16, n_samples=64, seed=3, out_dir=str(tmp_path / "models"))
+tests/test_arqtech.py:75:    assert len(result.train_loss) == 1 and len(result.val_loss) == 1
+tests/test_arqtech.py:78:def test_arqtech_experimental_mode_falls_back_without_detection_checkpoint():
+tests/test_camera_learning_geometry.py:12:def test_video_file_missing():
+tests/test_camera_learning_geometry.py:15:def test_smartphone_empty_url():
+tests/test_camera_learning_geometry.py:18:def test_geometry_engine_regions():
+tests/test_camera_learning_geometry.py:24:def test_frame_cache():
+tests/test_camera_learning_geometry.py:30:def test_experience_memory():
+tests/test_camera_learning_geometry.py:33:    s = mem.store(img, "test", [], 0.5, 0.2, "LOW", "FORWARD", 0.4)
+tests/test_camera_learning_geometry.py:34:    assert s is not None and mem.count() >= 1 and mem.set_review_status(s.sample_id, "accepted")
+tests/test_camera_learning_geometry.py:36:def test_pipeline_geometry_field():
+tests/test_camera_occupancy.py:16:def test_webcam_unavailable_device():
+tests/test_camera_occupancy.py:23:def test_ip_empty_url():
+tests/test_camera_occupancy.py:26:def test_preprocessor_stages():
+tests/test_camera_occupancy.py:31:def test_occupancy_and_cost():
+tests/test_camera_occupancy.py:39:def test_tracker_needs_temporal():
+tests/test_camera_occupancy.py:45:def test_pipeline_latency_breakdown():
+tests/test_experience_learning.py:11:def test_experience_id_and_summary():
+tests/test_experience_learning.py:14:    s = mem.store(img, camera_source="test", detections=[{"class": "obstacle", "confidence": 0.5}],
+tests/test_experience_learning.py:17:    assert s.model_prediction == s.detections and s.human_annotation is None
+tests/test_experience_learning.py:20:def test_review_preserves_prediction():
+tests/test_experience_learning.py:24:    mem.set_review_status(s.experience_id, "corrected", human_annotation=[{"class": "b", "confidence": 1.0}])
+tests/test_experience_learning.py:26:    assert got["review_status"] == "corrected"
+tests/test_experience_learning.py:28:    assert got["human_annotation"][0]["class"] == "b"
+tests/test_experience_learning.py:30:def test_dataset_from_accepted():
+tests/test_experience_learning.py:38:        if s: mem.set_review_status(s.experience_id, "accepted")
+tests/test_experience_learning.py:39:    approved = [x for x in mem.list_samples(100) if x["review_status"] == "accepted"]
+tests/test_experience_learning.py:43:def test_smart_capture_cooldown():
+tests/test_experience_learning.py:50:def test_dataset_uses_human_annotation_for_corrected_sample():
+tests/test_experience_learning.py:58:        "review_status": "corrected",
+tests/test_experience_learning.py:60:        "camera_source": "test",
+tests/test_experience_learning.py:62:        "human_annotation": [{"class": "chair", "confidence": 1.0}],
+tests/test_experience_learning.py:65:        [sample], train_ratio=1.0, val_ratio=0.0, test_ratio=0.0,
+tests/test_input_layer.py:10:def test_mask_url():
+tests/test_input_layer.py:13:def test_resolver_webcam():
+tests/test_input_layer.py:17:def test_resolver_rejects_youtube_without_ytdlp():
+tests/test_input_layer.py:22:def test_resolver_rtsp_shape():
+tests/test_input_layer.py:25:def test_frame_buffer_drops():
+tests/test_input_layer.py:29:    assert buf.drops >= 3 and buf.pop_latest() is not None
+tests/test_input_layer.py:31:def test_smart_capture_uncertainty():
+tests/test_input_layer.py:35:def test_frame_packet_universal_contract():
+tests/test_input_layer.py:38:        frame_id=9, source="test", fps=12.0, metadata={"input_type": "TEST"},
+tests/test_input_layer.py:46:def test_frame_buffer_tracks_discarded_latest_frames():
+tests/test_input_layer.py:49:        buf.push(FramePacket(np.zeros((2, 2, 3), dtype=np.uint8), 0.0, i, "test"))
+tests/test_input_layer.py:50:    assert buf.pop_latest().frame_id == 2
+tests/test_input_layer.py:54:def test_pipeline_accepts_frame_packet():
+tests/test_input_layer.py:58:        frame_id=12, source="test", fps=8.0,
+tests/test_input_layer.py:63:    assert result.source == "test"
+tests/test_ml_pipeline.py:10:from src.ml.training_config import TrainingConfig, save_training_config
+tests/test_ml_pipeline.py:12:def test_rank_for_review():
+tests/test_ml_pipeline.py:14:        {"sample_id": "a", "review_status": "pending", "uncertainty_overall": 0.9, "detections": []},
+tests/test_ml_pipeline.py:15:        {"sample_id": "b", "review_status": "accepted", "uncertainty_overall": 0.9, "detections": []},
+tests/test_ml_pipeline.py:16:        {"sample_id": "c", "review_status": "pending", "uncertainty_overall": 0.1, "detections": [{"confidence": 0.95}]},
+tests/test_ml_pipeline.py:19:    assert all(r["review_status"] == "pending" for r in ranked)
+tests/test_ml_pipeline.py:22:def test_dataset_builder_requires_approved():
+tests/test_ml_pipeline.py:25:        b.build_from_experiences([{"review_status": "pending"}])
+tests/test_ml_pipeline.py:30:def test_dataset_builder_and_report():
+tests/test_ml_pipeline.py:35:    experiences = [{"sample_id": f"s{i}", "review_status": "accepted", "image_path": str(path),
+tests/test_ml_pipeline.py:36:                    "detections": [{"class": "obstacle", "confidence": 0.8}], "camera_source": "test"} for i in range(5)]
+tests/test_ml_pipeline.py:45:def test_training_config_not_started():
+tests/test_ml_pipeline.py:47:    cfg = TrainingConfig(experiment_id="exp_test", model_name="ARQTECH", training_mode="FROM_SCRATCH", dataset_id="dataset_v001")
+tests/test_ml_pipeline.py:48:    data = json.loads(save_training_config(cfg, root=str(root)).read_text())
+tests/test_perception_upgrade.py:13:def test_nms_reduces_overlaps():
+tests/test_perception_upgrade.py:22:def test_tracker_confirm_not_left_immediately():
+tests/test_perception_upgrade.py:35:def test_obstacle_fusion_merges():
+tests/test_perception_upgrade.py:45:def test_nav_controller_debounces():
+tests/test_perception_upgrade.py:51:def test_pipeline_still_runs():
+tests/test_pipeline.py:1:"""Integration and unit tests."""
+tests/test_pipeline.py:16:def test_box_iou():
+tests/test_pipeline.py:19:def test_detector_empty():
+tests/test_pipeline.py:22:def test_detector_noise():
+tests/test_pipeline.py:26:def test_scene_analyzer():
+tests/test_pipeline.py:30:def test_risk_engine():
+tests/test_pipeline.py:35:def test_decision_engine():
+tests/test_pipeline.py:38:def test_planner():
+tests/test_pipeline.py:42:def test_pipeline():
+tests/test_scene_robotics.py:11:def test_relevance_not_all_obstacles():
+tests/test_scene_robotics.py:16:def test_narrative_no_hallucination():
+tests/test_scene_robotics.py:21:def test_inventory():
+tests/test_scene_robotics.py:26:def test_nav_state():
+tests/test_scene_robotics.py:29:def test_pipeline_narrative_fields():
+tests/test_uncertainty_tracker.py:1:"""Uncertainty and tracker tests."""
+tests/test_uncertainty_tracker.py:14:def test_uncertainty_empty_detections():
+tests/test_uncertainty_tracker.py:19:def test_uncertainty_with_detections():
+tests/test_uncertainty_tracker.py:24:def test_tracker_single_frame():
+tests/test_uncertainty_tracker.py:29:def test_tracker_two_frames():
+tests/test_uncertainty_tracker.py:35:def test_occupancy_and_cost():
+tests/test_uncertainty_tracker.py:43:def test_pipeline_uncertainty_field():
+tests/test_video_analysis.py:19:def test_video_seek_and_metadata():
+tests/test_video_analysis.py:29:def test_video_analyzer_report():
+tests/test_video_metadata.py:19:def test_metadata_method_exists():
+tests/test_video_metadata.py:22:def test_valid_mp4_metadata():
+tests/test_video_metadata.py:34:def test_obtain_without_metadata_method():
+tests/test_video_metadata.py:42:def test_empty_file():
+tests/test_video_metadata.py:50:def test_missing_file():
+tests/test_video_metadata.py:56:def test_empty_metadata_helper():
+tests/test_yolo_baseline_tracking.py:17:def test_normalized_detection_contract_contains_provenance():
+tests/test_yolo_baseline_tracking.py:27:def test_yolo_unavailable_falls_back_without_crashing(monkeypatch):
+tests/test_yolo_baseline_tracking.py:35:    fake.__version__ = "test"
+tests/test_yolo_baseline_tracking.py:45:def test_yolo_adapter_normalizes_ultralytics_result(monkeypatch):
+tests/test_yolo_baseline_tracking.py:73:    fake.__version__ = "8.test"
+tests/test_yolo_baseline_tracking.py:80:    assert detections[0].model_version == "8.test"
+tests/test_yolo_baseline_tracking.py:84:def test_tracker_ids_and_temporal_history():
+tests/test_yolo_baseline_tracking.py:97:def test_smoothing_keeps_raw_and_smoothed_centers():
+tests/test_yolo_baseline_tracking.py:109:def test_baseline_comparison_is_measured_without_quality_claim():
+tests/test_yolo_baseline_tracking.py:117:def test_orchestrator_fuses_same_class_and_preserves_sources():
+tests/test_yolo_baseline_tracking.py:147:def test_orchestrator_isolates_failed_source():
+tests/test_groq_integration.py:22:    headers = {"x-request-id": "req-test"}
+tests/test_groq_integration.py:25:            "id": "chat-test",
+tests/test_groq_integration.py:38:def test_groq_disabled_without_secret():
+tests/test_groq_integration.py:45:def test_groq_success_normalizes_json_and_keeps_secret_out_of_public_status():
+tests/test_groq_integration.py:48:        secret_provider=SecretStub("gsk-test-secret"),
+tests/test_groq_integration.py:55:    assert session.calls[0]["headers"]["Authorization"].endswith("gsk-test-secret")
+tests/test_groq_integration.py:57:    assert "gsk-test-secret" not in str(client.public_status())
+tests/test_groq_integration.py:60:def test_pipeline_keeps_groq_advisory_and_disabled():
+tests/test_segmentation.py:22:def test_contour_segmenter_produces_estimated_mask_and_perimeter():
+tests/test_segmentation.py:35:def test_geometry_prefers_mask_contour_metrics():
+tests/test_segmentation.py:45:def test_pipeline_exposes_segmentation_report():
+tests/test_motion.py:17:def test_motion_engine_uses_track_history_and_constant_velocity_prediction():
+=== ARQTECH V03 ===
+src/arqtech/architecture.py:13:    detection_head: str = "DetectionHead (experimental, annotation-dependent)"
+src/arqtech/architecture.py:41:            "heads": ["src/arqtech/heads/classification.py", "src/arqtech/heads/detection.py"],
+src/arqtech/architecture.py:52:            "No claim of production object detection.",
+src/arqtech/architecture.py:53:            "No claim of mAP, precision or recall without reviewed detection data.",
+src/arqtech/train.py:10:from torch.utils.data import DataLoader, random_split
+src/arqtech/train.py:56:    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+src/arqtech/train.py:57:    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
+src/arqtech/train.py:111:            "Do not report this as production object-detection mAP.",
+src/arqtech/train.py:112:            "Next: human-reviewed Experience Memory and reviewed detection data.",
+src/arqtech/model/arqtech_model.py:10:from ..heads.detection import DetectionHead
+src/arqtech/model/arqtech_model.py:19:    without reviewed detection annotations and evaluation.
+src/arqtech/model/arqtech_model.py:32:        self.detection_head = DetectionHead(self.backbone.out_channels, self.num_classes)
+src/arqtech/model/arqtech_model.py:47:            **self.detection_head(features),
+src/arqtech/heads/detection.py:8:    """Grid-free bootstrap head; requires detection annotations before use as a detector."""
+src/arqtech/heads/__init__.py:2:from .detection import DetectionHead
+src/arqtech/training/engine.py:9:from torch.utils.data import DataLoader
+src/arqtech/training/engine.py:39:    train_loader: DataLoader,
+src/arqtech/training/engine.py:40:    val_loader: DataLoader,
+src/arqtech/validation/classification.py:7:from torch.utils.data import DataLoader
+src/arqtech/validation/classification.py:23:def validate_classification(model, loader: DataLoader, device="cpu", dataset="unknown") -> ValidationResult:
+src/arqtech/validation/classification.py:47:            "This is not object-detection mAP, precision or recall.",
+src/arqtech/inference/detector.py:41:        return bool(self.inference.loaded and self.task == "object_detection")
+src/arqtech/inference/detector.py:46:        if self.task != "object_detection":
+src/arqtech/inference/detector.py:48:                f"ARQTECH checkpoint task={self.task} is not an object detector; no detection output claimed"
+src/arqtech/inference/detector.py:51:            "ARQTECH object-detection postprocessing requires reviewed detection annotations"
+src/ml/active_learning.py:12:        dets = s.get("detections") or []
+src/ml/dataset_builder.py:67:                annotations = human_annotation if review_status == "corrected" and human_annotation else e.get("detections", [])
+src/ml/dataset_builder.py:71:                    "detections": annotations,
+src/ml/dataset_builder.py:72:                    "model_prediction": e.get("detections", []),
+src/ml/dataset_builder.py:78:                for d in e.get("detections") or []:
+src/ml/report.py:42:        not_measured = [k for k in ("mAP@50", "mAP@50-95", "precision", "recall", "f1") if k not in measured]
+src/ml/report.py:60:                "note": "Synthetic classification curves must not be reported as production detection metrics.",
+src/ml/report.py:62:            "class_performance": "NOT MEASURED" if "precision" not in measured else measured.get("precision"),
+src/ml/training_config.py:23:    mixed_precision: bool = False
+tests/test_arqtech.py:78:def test_arqtech_experimental_mode_falls_back_without_detection_checkpoint():
+tests/test_camera_occupancy.py:48:    assert "detection" in r.latency.stages
+tests/test_experience_learning.py:14:    s = mem.store(img, camera_source="test", detections=[{"class": "obstacle", "confidence": 0.5}],
+tests/test_experience_learning.py:17:    assert s.model_prediction == s.detections and s.human_annotation is None
+tests/test_experience_learning.py:22:    s = mem.store(np.zeros((32, 32, 3), dtype=np.uint8), detections=[{"class": "a", "confidence": 0.9}],
+tests/test_experience_learning.py:35:                      detections=[{"class": "obstacle", "confidence": 0.8}],
+tests/test_experience_learning.py:61:        "detections": [{"class": "person", "confidence": 0.5}],
+tests/test_experience_learning.py:68:    assert label["detections"][0]["class"] == "chair"
+tests/test_ml_pipeline.py:14:        {"sample_id": "a", "review_status": "pending", "uncertainty_overall": 0.9, "detections": []},
+tests/test_ml_pipeline.py:15:        {"sample_id": "b", "review_status": "accepted", "uncertainty_overall": 0.9, "detections": []},
+tests/test_ml_pipeline.py:16:        {"sample_id": "c", "review_status": "pending", "uncertainty_overall": 0.1, "detections": [{"confidence": 0.95}]},
+tests/test_ml_pipeline.py:36:                    "detections": [{"class": "obstacle", "confidence": 0.8}], "camera_source": "test"} for i in range(5)]
+tests/test_perception_upgrade.py:7:from src.vision.nms import nms_detections
+tests/test_perception_upgrade.py:19:    out = nms_detections(dets, iou_threshold=0.4)
+tests/test_perception_upgrade.py:43:    assert fusion_stats(3, fused)["raw_detections"] == 3
+tests/test_uncertainty_tracker.py:14:def test_uncertainty_empty_detections():
+tests/test_uncertainty_tracker.py:17:    assert "detection" in u.contributors
+tests/test_uncertainty_tracker.py:19:def test_uncertainty_with_detections():
+tests/test_uncertainty_tracker.py:22:    assert u.detection_uncertainty < 0.5
+tests/test_yolo_baseline_tracking.py:17:def test_normalized_detection_contract_contains_provenance():
+tests/test_yolo_baseline_tracking.py:76:    detections = detector.detect(np.zeros((64, 64, 3), dtype=np.uint8), timestamp=3.0, frame_id=7)
+tests/test_yolo_baseline_tracking.py:77:    assert len(detections) == 1
+tests/test_yolo_baseline_tracking.py:78:    assert detections[0].class_name == "person"
+tests/test_yolo_baseline_tracking.py:79:    assert detections[0].source_model == "YOLO"
+tests/test_yolo_baseline_tracking.py:80:    assert detections[0].model_version == "8.test"
+tests/test_yolo_baseline_tracking.py:81:    assert detections[0].frame_id == 7
+tests/test_yolo_baseline_tracking.py:141:    assert len(result.detections) == 1
+tests/test_yolo_baseline_tracking.py:142:    assert result.detections[0].agreement_count == 2
+tests/test_yolo_baseline_tracking.py:143:    assert set(result.detections[0].source_models) == {"STUB", "STUB2"}
+tests/test_yolo_baseline_tracking.py:144:    assert result.fusion["merged_detections"] == 1
+tests/test_yolo_baseline_tracking.py:156:    assert result.detections == []
+tests/test_segmentation.py:15:def _sample_detection():
+tests/test_segmentation.py:25:    result = ContourSegmenter().segment(image, [_sample_detection()])
+tests/test_segmentation.py:28:    detection = result.detections[0]
+tests/test_segmentation.py:29:    assert detection.mask is not None
+tests/test_segmentation.py:30:    assert detection.mask_area_px2 is not None and detection.mask_area_px2 > 0
+tests/test_segmentation.py:31:    assert detection.mask_perimeter_px is not None and detection.mask_perimeter_px > 0
+tests/test_segmentation.py:32:    assert detection.segmentation_status == "ESTIMATED"
+tests/test_segmentation.py:38:    detection = ContourSegmenter().segment(image, [_sample_detection()]).detections[0]
+tests/test_segmentation.py:39:    geometry = GeometryEngine().analyze([detection], image.shape)[0]
+tests/test_motion.py:13:def _detections(x, y):
+tests/test_motion.py:20:    tracks = tracker.update(_detections(10, 10), timestamp=0.0, frame_id=1)
+tests/test_motion.py:23:    tracks = tracker.update(_detections(12, 15), timestamp=1.0, frame_id=2)
+tests/test_motion.py:34:    motion.update(tracker.update(_detections(10, 10), timestamp=0.0, frame_id=1), timestamp=0.0)
+tests/test_motion.py:36:        tracker.update(_detections(10, 14), timestamp=1.0, frame_id=2), timestamp=1.0,
+tests/test_world_model_cost.py:16:def test_semantic_occupancy_combines_free_space_and_detection():
+tests/test_world_model_cost.py:18:    detection = Detection("person", 0.9, (16, 16, 32, 32), (24, 24))
+tests/test_world_model_cost.py:19:    semantic = build_semantic_occupancy((64, 64), mask, [detection], [], cell_size=16)
+tests/test_world_model_cost.py:31:    detection = Detection("person", 0.9, (20, 40, 40, 60), (30, 50))
+tests/test_world_model_cost.py:32:    risk = RiskEngine().assess(scene, detections=[detection], image_shape=(64, 64))
+tests/test_experience_enriched.py:15:        detections=[{"class_name": "person", "mask_available": True}],
+=== TEST COUNT ===
+96 tests collected in 3.76s

@@ -66,3 +66,31 @@ def test_pipeline_keeps_groq_advisory_and_disabled():
     assert result.groq_analysis["status"] == "DISABLED"
     assert result.metrics()["groq"]["status"] == "DISABLED"
     assert result.fused_obstacles == [] or isinstance(result.fused_obstacles, list)
+
+
+class ErrorResponse:
+    def __init__(self, status_code):
+        self.status_code = status_code
+        self.headers = {}
+    def json(self):
+        return {"error": {"message": "test"}}
+
+
+class ErrorSession:
+    def __init__(self, status_code):
+        self.status_code = status_code
+    def post(self, *args, **kwargs):
+        return ErrorResponse(self.status_code)
+
+
+def test_groq_health_statuses_are_sanitized():
+    disabled = GroqClient(secret_provider=SecretStub(), config=GroqConfig())
+    assert disabled.public_status()["status"] == "NOT CONFIGURED"
+    invalid = GroqClient(secret_provider=SecretStub("gsk-test-secret"), config=GroqConfig(retries=0), session=ErrorSession(401))
+    result = invalid.analyze_image(np.zeros((8, 8, 3), dtype=np.uint8), "describe")
+    assert result.health_status == "INVALID KEY"
+    assert "gsk-test-secret" not in str(invalid.public_status())
+    limited = GroqClient(secret_provider=SecretStub("gsk-test-secret"), config=GroqConfig(retries=0), session=ErrorSession(429))
+    result = limited.analyze_image(np.zeros((8, 8, 3), dtype=np.uint8), "describe")
+    assert result.health_status == "RATE LIMITED"
+    assert limited.public_status()["rate_limit_status"] == "RATE LIMITED"

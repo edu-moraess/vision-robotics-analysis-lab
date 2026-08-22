@@ -42,6 +42,7 @@ class ExperienceSample:
     risk: Optional[dict] = None
     occupancy: Optional[dict] = None
     simulation: Optional[dict] = None
+    review_history: List[dict] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
 
     def to_dict(self):
@@ -139,6 +140,53 @@ class ExperienceMemory:
                 row["review_status"] = status
                 if human_annotation is not None: row["human_annotation"] = human_annotation
                 if notes: row.setdefault("notes", []).append(notes)
+                row.setdefault("review_history", []).append({
+                    "timestamp": time.time(), "action": status.upper(),
+                    "review_status": status, "human_annotation_present": human_annotation is not None,
+                })
+                found = True
+            out.append(json.dumps(row))
+        if found:
+            self.index_path.write_text("\n".join(out) + "\n", encoding="utf-8")
+        return found
+
+    def apply_review(self, experience_id, action, annotations=None, reviewer="human", notes=None):
+        action = str(action or "").upper().replace(" ", "_")
+        action_to_status = {
+            "ACCEPT": "accepted", "EDIT": "corrected", "DELETE": "corrected",
+            "ADD_OBJECT": "corrected", "CHANGE_CLASS": "corrected", "REJECT": "rejected",
+        }
+        if action not in action_to_status:
+            raise ValueError(f"Unsupported review action: {action}")
+        if not self.index_path.exists():
+            return False
+        lines = self.index_path.read_text(encoding="utf-8").splitlines()
+        out, found = [], False
+        for line in lines:
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                out.append(line)
+                continue
+            if row.get("experience_id") == experience_id or row.get("sample_id") == experience_id:
+                status = action_to_status[action]
+                if action == "DELETE":
+                    annotations = [] if annotations is None else [
+                        a for a in (row.get("human_annotation") or row.get("detections") or [])
+                        if a not in annotations
+                    ]
+                if annotations is not None:
+                    row["human_annotation"] = list(annotations)
+                row["review_status"] = status
+                row.setdefault("review_history", []).append({
+                    "timestamp": time.time(), "action": action, "reviewer": reviewer,
+                    "annotation_count": len(row.get("human_annotation") or []),
+                    "notes": notes or "",
+                })
+                if notes:
+                    row.setdefault("notes", []).append(notes)
                 found = True
             out.append(json.dumps(row))
         if found:

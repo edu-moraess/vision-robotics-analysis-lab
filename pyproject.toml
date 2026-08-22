@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vision-robotics-analysis-lab"
+version = "0.4.0"
+description = "Modular computer-vision and image-space robotics perception laboratory"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Vision Robotics Analysis Lab" }]
+dependencies = [
+  "numpy>=1.24",
+  "opencv-python-headless>=4.8.0",
+  "scipy>=1.11.0",
+  "Pillow>=10.0.0",
+  "streamlit>=1.28.0",
+  "PyYAML>=6.0",
+  "requests>=2.31.0",
+  "torch>=2.0.0",
+  "groq>=0.11.0",
+  "ultralytics>=8.3.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.4.0"]
+
+yolo = ["ultralytics>=8.3.0"]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.vral]
+application = "Vision Robotics Analysis Lab"
+default_detector = "CURRENT DETECTOR"
+arqtech_enabled = true
+arqtech_role = "EXPERIMENTAL MACHINE LEARNING MODEL"
+groq_role = "EXTERNAL MULTIMODAL REVIEW"
+secrets_provider = "streamlit.secrets"
+metric_calibration_default = false

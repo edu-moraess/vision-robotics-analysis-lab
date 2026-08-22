@@ -28,6 +28,10 @@ class TrainingConfig:
     dataset_scope: str = "HUMAN_REVIEW_REQUIRED"
     hardware: str = field(default_factory=lambda: platform.machine())
     software: str = field(default_factory=platform.python_version)
+    scheduler: str = "cosine"
+    device: str = "auto"
+    validation_dataset_id: Optional[str] = None
+    lifecycle_status: str = "ARCHITECTURE"
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -42,8 +46,20 @@ def save_training_config(cfg: TrainingConfig, root: str = "data/experiments") ->
     payload = {
         "config": cfg.to_dict(),
         "status": "CONFIGURED_NOT_STARTED",
-        "lifecycle_status": "NOT TRAINED",
-        "metrics": {},
+        "lifecycle_status": cfg.lifecycle_status or "ARCHITECTURE",
+        "metrics": {
+            "epochs_completed": None,
+            "train_loss": None,
+            "validation_loss": None,
+            "learning_rate": None,
+            "duration_seconds": None,
+            "device": None,
+            "mAP@50": None,
+            "mAP@50-95": None,
+            "precision": None,
+            "recall": None,
+            "f1": None,
+        },
         "message": "Training is configured but has not executed. No metrics are claimed.",
         "created_at": time.time(),
     }
