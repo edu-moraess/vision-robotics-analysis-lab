@@ -1,4 +1,4 @@
-# Compatibility extra for deployments that install YOLO separately.
-# ultralytics is also declared in requirements.txt because the current app exposes
-# the external YOLO baseline directly; keeping this file avoids breaking old setup scripts.
+# Optional YOLO/Ultralytics deployment extra.
+# Install this only when the YOLO baseline is needed; the base app uses
+# opencv-python-headless and the YOLO package may request opencv-python.
 ultralytics>=8.3.0

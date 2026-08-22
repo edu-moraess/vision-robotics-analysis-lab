@@ -1,7 +1,7 @@
 # Runtime dependencies for Streamlit deployment
 numpy>=1.24
-# Ultralytics requires opencv-python; do not install the headless variant alongside it.
-opencv-python==5.0.0.93
+# Streamlit Cloud is a headless server; keep only one cv2 provider.
+opencv-python-headless==5.0.0.93
 scipy>=1.11.0
 Pillow>=10.0.0
 streamlit>=1.28.0
@@ -9,7 +9,6 @@ PyYAML>=6.0
 requests>=2.31.0
 torch>=2.0.0
 groq>=0.11.0
-ultralytics>=8.3.0
-
+# Ultralytics/YOLO is optional and is installed only in requirements-yolo.txt.
 # Test dependency used by the repository test suite
 pytest>=7.4.0
