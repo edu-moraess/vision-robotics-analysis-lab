@@ -17,6 +17,7 @@ from src.learning import ExperienceMemory, FrameCache
 from src.arqtech import ModelRegistry, describe_architecture
 from src.ml import DatasetBuilder, rank_for_review, LearningReportGenerator, TrainingConfig, save_training_config, inspect_manifest
 from src.input import InputManager, InputDescriptor, SourceType, SmartCapturePolicy, mask_url
+from src.vision.video_analysis import VideoAnalyzer
 
 st.set_page_config(page_title="Vision Robotics Lab", page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""<style>
@@ -71,7 +72,7 @@ with st.sidebar:
     cell_size = st.slider("Grid cell (px)", 8, 32, 16, 4)
     show_path = st.checkbox("Navigation path", True)
     analyze_btn = st.button("RUN ANALYSIS", type="primary", use_container_width=True)
-    st.caption("Active: Classical CV · ARQTECH: scaffold · Inference ≠ Training")
+    st.caption("Active: Classical CV · ONE pipeline for image / video / live")
 
 for key, default in [("result", None), ("original_bgr", None), ("last_file_id", None),
                      ("camera", None), ("live_running", False), ("fps", 0.0), ("frame_count", 0)]:
@@ -143,7 +144,7 @@ s3.markdown("**MODEL**  \n<span class='status-on'>● CLASSICAL</span>", unsafe_
 s4.markdown("**ARQTECH**  \n<span class='status-off'>○ SCAFFOLD</span>", unsafe_allow_html=True)
 s5.markdown("**LEARN**  \n<span class='status-off'>○ LOOP</span>", unsafe_allow_html=True)
 
-tabs = st.tabs(["MISSION CONTROL", "LIVE", "VIDEO INPUT", "PERCEPTION", "SCENE", "NAVIGATION", "BRAIN", "REVIEW", "DATASET", "TRAINING", "ARQTECH", "DIAGNOSTICS", "SYSTEM"])
+tabs = st.tabs(["MISSION CONTROL", "LIVE", "VIDEO INPUT", "RECORDED VIDEO", "PERCEPTION", "SCENE", "NAVIGATION", "BRAIN", "REVIEW", "DATASET", "TRAINING", "ARQTECH", "DIAGNOSTICS", "SYSTEM"])
 
 with tabs[0]:
     if original_bgr is None: st.info("Upload an image or start a camera.")
@@ -165,12 +166,11 @@ with tabs[0]:
                     risk_score=result.risk.score, risk_level=result.risk.level, decision=result.decision.action,
                     uncertainty_overall=result.uncertainty.overall if result.uncertainty else None,
                     capture_reason="MANUAL", source_type="STREAMLIT", model_name="classical-cv-baseline")
-                st.success(f"Stored {sample.experience_id}" if sample else "Skipped (duplicate/filter)")
+                st.success(f"Stored {sample.experience_id}" if sample else "Skipped")
 
 with tabs[1]:
     st.markdown("### LIVE ROBOTIC PERCEPTION")
-    if result is None:
-        st.info("No frame. Upload an image or start a camera.")
+    if result is None: st.info("No frame.")
     else:
         col_v, col_s = st.columns([2, 1])
         with col_v:
@@ -181,26 +181,14 @@ with tabs[1]:
             st.caption(nav.get("message", ""))
             st.metric("ACTION", result.decision.action)
             st.metric("RISK", result.risk.level)
-            st.metric("FREE SPACE", f"{result.scene.estimated_free_space_ratio*100:.0f}%")
             if result.inventory:
-                st.markdown("**SCENE INVENTORY**")
-                for k, v in result.inventory.items():
-                    st.write(f"{k} × {v}")
-        st.markdown("**SCENE UNDERSTANDING**")
+                st.markdown("**INVENTORY**")
+                for k, v in result.inventory.items(): st.write(f"{k} × {v}")
         for line in (result.narrative or []):
             st.write("• " + line)
-        if result.enriched_detections:
-            st.markdown("**DETECTIONS** (classes from active model — not hard-coded UI list)")
-            for row in result.enriched_detections[:12]:
-                st.write(
-                    f"**{str(row.get('class_name','?')).upper()}** · {float(row.get('confidence',0)):.0%} · "
-                    f"{row.get('position_label','')} · {row.get('navigation_relevance','')} · "
-                    f"Distance: {row.get('distance','NOT AVAILABLE')}"
-                )
 
 with tabs[2]:
     st.markdown("### LIVE INPUT MANAGER")
-    st.caption("ONE perception pipeline · MANY sources. Webpage URLs ≠ media streams.")
     mgr = st.session_state.input_manager
     src_label = st.selectbox("SOURCE", ["Smartphone", "Webcam", "IP Camera", "RTSP", "HTTP / MJPEG", "YouTube Live", "Twitch", "Generic Stream", "Video File"], key="uvi_src")
     mapping = {"Smartphone": SourceType.SMARTPHONE, "Webcam": SourceType.WEBCAM, "IP Camera": SourceType.IP_CAMERA,
@@ -208,8 +196,6 @@ with tabs[2]:
                "Twitch": SourceType.TWITCH, "Generic Stream": SourceType.GENERIC_STREAM, "Video File": SourceType.VIDEO_FILE}
     stype = mapping[src_label]
     ident = st.text_input("URL / PATH / DEVICE", value="0" if stype == SourceType.WEBCAM else "", key="uvi_id")
-    if stype in (SourceType.YOUTUBE_LIVE, SourceType.TWITCH):
-        st.info("Not a direct stream. Optional yt-dlp may resolve; otherwise SOURCE NOT DIRECTLY COMPATIBLE.")
     c1,c2,c3 = st.columns(3)
     if c1.button("TEST CONNECTION", key="uvi_t"):
         st.session_state.last_diag = mgr.test_connection(InputDescriptor(stype, ident))
@@ -217,23 +203,95 @@ with tabs[2]:
         d = mgr.connect(InputDescriptor(stype, ident)); st.session_state.last_diag = d
         (st.success if d.connection == "ONLINE" else st.error)(d.message)
     if c3.button("DISCONNECT", key="uvi_d"):
-        mgr.disconnect(); st.info("Disconnected")
+        mgr.disconnect()
     diag = st.session_state.get("last_diag") or mgr.last_diagnostics
-    st.markdown(f"**STATUS** · `{diag.connection}` · Decoder `{diag.decoder}`")
-    st.caption(diag.message)
-    if diag.resolution: st.write(f"Resolution {diag.resolution} · FPS {diag.measured_fps} · Probe latency {diag.latency_ms} ms")
-    if diag.masked_url: st.caption(f"Source: {mask_url(diag.masked_url)}")
-    unc_th = st.slider("Smart capture uncertainty threshold", 0.0, 1.0, 0.35, 0.05, key="uvi_u")
-    cool = st.slider("Capture cooldown (s)", 0.0, 30.0, 5.0, 0.5, key="uvi_cd")
-    st.session_state.smart_policy = SmartCapturePolicy(uncertainty_threshold=unc_th, cooldown_s=cool)
+    st.caption(f"{diag.connection} · {diag.decoder} · {diag.message}")
 
 with tabs[3]:
+    st.markdown("### RECORDED VIDEO LAB")
+    st.caption("Same FramePacket → AnalysisPipeline. No separate detector.")
+    up_vid = st.file_uploader("Upload video (mp4/avi/mov/mkv/webm)", type=["mp4", "avi", "mov", "mkv", "webm"], key="vid_up")
+    sample_every = st.selectbox("Sample every N frames", [1, 2, 5, 10], index=1, key="vid_sample")
+    if up_vid is not None:
+        tmp = Path("data/experience") / f"upload_{up_vid.name}"
+        tmp.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_bytes(up_vid.getvalue())
+        if st.session_state.get("video_path") != str(tmp):
+            if st.session_state.get("video_src"):
+                try: st.session_state.video_src.stop()
+                except Exception: pass
+            vs = VideoFileSource(str(tmp), loop=False)
+            st_status = vs.start()
+            st.session_state.video_src = vs
+            st.session_state.video_path = str(tmp)
+            if not st_status.online: st.error(st_status.message)
+        vs = st.session_state.video_src
+        meta = vs.metadata()
+        st.json({k: meta[k] for k in ("filename", "format", "duration_s", "resolution", "source_fps", "frame_count", "file_size_bytes")})
+        max_f = meta["frame_count"] if isinstance(meta.get("frame_count"), int) and meta["frame_count"] > 0 else 100
+        frame_idx = st.slider("Seek frame", 0, max(0, max_f - 1), 0, key="vid_seek")
+        c1, c2, c3, c4 = st.columns(4)
+        if c1.button("SHOW FRAME", key="vid_show"):
+            pkt = vs.seek_frame(frame_idx)
+            if pkt is not None:
+                r = get_pipeline(min_area, conf_thresh, cell_size, True).run(pkt.image, run_planner=run_planner)
+                st.session_state.result = r
+                st.session_state.original_bgr = pkt.image
+                st.session_state._last_vid_pkt = pkt
+        if c2.button("CAPTURE EXPERIENCE", key="vid_cap") and st.session_state.result is not None:
+            pkt = st.session_state.get("_last_vid_pkt")
+            sample = st.session_state.experience_memory.store(
+                image=st.session_state.result.annotated_image,
+                camera_source=f"video:{meta.get('filename')}",
+                detections=[d.to_dict() for d in st.session_state.result.detections],
+                free_space_ratio=st.session_state.result.scene.estimated_free_space_ratio,
+                risk_score=st.session_state.result.risk.score,
+                risk_level=st.session_state.result.risk.level,
+                decision=st.session_state.result.decision.action,
+                uncertainty_overall=st.session_state.result.uncertainty.overall if st.session_state.result.uncertainty else None,
+                capture_reason="MANUAL", source_type="RECORDED_VIDEO",
+                source_identifier=str(meta.get("filename")),
+                frame_id=pkt.frame_id if pkt else frame_idx,
+                model_name="classical-cv-baseline",
+            )
+            st.success(sample.experience_id if sample else "Skipped")
+        if c3.button("FAST SCAN (sampled)", key="vid_fast"):
+            analyzer = VideoAnalyzer(get_pipeline(min_area, conf_thresh, cell_size, True))
+            results, fids, tss, skipped = [], [], [], 0
+            t0 = time.perf_counter()
+            fps = meta["source_fps"] if isinstance(meta.get("source_fps"), (int, float)) and meta["source_fps"] else 25
+            n = meta["frame_count"] if isinstance(meta.get("frame_count"), int) else 0
+            for i in range(0, max(n, 1), int(sample_every)):
+                pkt = vs.seek_frame(i)
+                if pkt is None:
+                    skipped += 1
+                    continue
+                r = analyzer.analyze_frame(pkt.image, run_planner=run_planner)
+                results.append(r); fids.append(pkt.frame_id); tss.append(i / float(fps) if fps else float(i))
+            if results:
+                st.session_state.result = results[-1]
+                st.session_state.original_bgr = results[-1].annotated_image
+                st.session_state.video_report = analyzer.build_report(str(meta.get("filename")), results, fids, tss, skipped, time.perf_counter() - t0).to_dict()
+                st.success(f"Analyzed {len(results)} frames")
+        if c4.button("STOP VIDEO", key="vid_stop"):
+            vs.stop(); st.session_state.video_src = None
+        if st.session_state.result is not None and st.session_state.get("video_path") == str(tmp):
+            st.image(bgr_to_rgb(st.session_state.result.path_overlay if show_path else st.session_state.result.annotated_image), use_container_width=True)
+            for line in (st.session_state.result.narrative or [])[:6]:
+                st.write("• " + line)
+        if st.session_state.get("video_report"):
+            st.markdown("**VIDEO REPORT**")
+            st.json(st.session_state.video_report)
+    else:
+        st.info("Upload MP4/AVI/MOV/MKV/WebM — same perception as live camera.")
+
+with tabs[4]:
     if result is None: st.info("No analysis.")
     else:
         st.image(bgr_to_rgb(result.annotated_image), use_container_width=True)
         if result.detections: st.dataframe([d.to_dict() for d in result.detections], use_container_width=True)
 
-with tabs[4]:
+with tabs[5]:
     if result is None: st.info("No analysis.")
     else:
         s = result.scene
@@ -241,16 +299,15 @@ with tabs[4]:
         a.metric("Objects", s.object_count); b.metric("Obstacles", s.obstacle_count)
         c.metric("Free space", f"{s.estimated_free_space_ratio*100:.1f}%"); d.metric("Density", f"{s.obstacle_density*100:.1f}%")
 
-with tabs[5]:
+with tabs[6]:
     if result is None: st.info("No analysis.")
     elif show_path: st.image(bgr_to_rgb(result.path_overlay), use_container_width=True)
 
-with tabs[6]:
-    if result is None: st.info("No analysis.")
-    else:
-        st.metric("ACTION", result.decision.action); st.markdown(result.decision.reason)
-
 with tabs[7]:
+    if result is None: st.info("No analysis.")
+    else: st.metric("ACTION", result.decision.action); st.markdown(result.decision.reason)
+
+with tabs[8]:
     st.markdown("### EXPERIENCE & HUMAN REVIEW")
     mem = st.session_state.experience_memory
     summ = mem.summary()
@@ -258,64 +315,52 @@ with tabs[7]:
     a.metric("Total", summ["total"]); b.metric("Pending", summ["pending"])
     c.metric("Accepted", summ["accepted"]); d.metric("Corrected", summ["corrected"])
     e.metric("Training-ready", summ["training_ready"])
-    st.caption("Prediction ≠ ground truth. Only ACCEPTED/CORRECTED enter datasets. Inference never trains.")
     ranked = rank_for_review(mem.list_samples(100), limit=20)
     if ranked:
         choice = st.selectbox("Sample", [r.get("experience_id") or r.get("sample_id") for r in ranked])
-        sel = next((r for r in ranked if (r.get("experience_id") or r.get("sample_id")) == choice), ranked[0])
-        st.json({k: sel.get(k) for k in ("experience_id", "capture_reason", "review_status", "uncertainty_overall", "model_name")})
         c1,c2,c3 = st.columns(3)
-        if c1.button("ACCEPT"): mem.set_review_status(choice, "accepted"); st.success("accepted")
+        if c1.button("ACCEPT"): mem.set_review_status(choice, "accepted")
         if c2.button("REJECT"): mem.set_review_status(choice, "rejected")
         if c3.button("CORRECT"): mem.set_review_status(choice, "corrected")
-    else:
-        st.info("Store experiences from Mission Control first.")
+    else: st.info("Store experiences first.")
 
-with tabs[8]:
+with tabs[9]:
     st.markdown("### DATASET LAB")
     approved = [s for s in st.session_state.experience_memory.list_samples(500) if s.get("review_status") in ("accepted", "corrected")]
-    st.metric("Approved / training-ready", len(approved))
+    st.metric("Approved", len(approved))
     if st.button("Build dataset version"):
         try:
             man = DatasetBuilder().build_from_experiences(approved)
             st.json(man.to_dict())
-            for w in inspect_manifest(man.to_dict()):
-                st.warning(w)
-        except Exception as e:
-            st.error(str(e))
-    st.dataframe(DatasetBuilder().list_datasets(), use_container_width=True)
+            for w in inspect_manifest(man.to_dict()): st.warning(w)
+        except Exception as e: st.error(str(e))
 
-with tabs[9]:
-    st.warning("Config only — does NOT train. Metrics remain NOT MEASURED. Active model is never auto-replaced.")
+with tabs[10]:
+    st.warning("Config only — does NOT train. Metrics NOT MEASURED.")
     if st.button("Save training config"):
         cfg = TrainingConfig(experiment_id=f"exp_{uuid.uuid4().hex[:8]}", model_name="ARQTECH",
                              training_mode="FROM_SCRATCH", dataset_id="none")
         st.success(str(save_training_config(cfg)))
 
-with tabs[10]:
-    st.warning("ARQTECH SCAFFOLD — not trained. No fabricated mAP.")
+with tabs[11]:
+    st.warning("ARQTECH SCAFFOLD — not trained.")
     st.json(describe_architecture())
     st.dataframe(ModelRegistry().list_models(), use_container_width=True)
-    if st.button("GENERATE LEARNING REPORT"):
-        rep = LearningReportGenerator().generate(experience_samples=st.session_state.experience_memory.list_samples(200))
-        st.json(rep)
 
-with tabs[11]:
+with tabs[12]:
     if result is None: st.info("No analysis.")
     else: st.json(result.metrics())
 
-with tabs[12]:
+with tabs[13]:
     import platform
     st.markdown(f"""
 | Component | Status |
 |-----------|--------|
 | Classical Detector | ACTIVE |
-| Universal Video Input | IMPLEMENTED |
-| Live Robotic Perception + narrative | IMPLEMENTED |
-| Experience Memory / Review / Dataset | IMPLEMENTED |
-| Training config | IMPLEMENTED (not executed) |
+| Image / Live / Recorded Video | **ONE pipeline** |
+| RECORDED VIDEO LAB | IMPLEMENTED |
+| Experience Memory | IMPLEMENTED |
 | ARQTECH | SCAFFOLD |
-| Depth / meters | NOT AVAILABLE |
 | Python | {platform.python_version()} |
 """)
     st.caption("https://github.com/edu-moraess/vision-robotics-analysis-lab")
