@@ -3,6 +3,7 @@ from .webcam import WebcamSource
 from .ip_camera import IPCameraSource
 from .video_file import VideoFileSource
 from .smartphone import SmartphoneCameraSource
+from .video_metadata import obtain_video_metadata, empty_metadata
 
 __all__ = [
     "CameraSource",
@@ -12,4 +13,6 @@ __all__ = [
     "IPCameraSource",
     "VideoFileSource",
     "SmartphoneCameraSource",
+    "obtain_video_metadata",
+    "empty_metadata",
 ]
