@@ -1,29 +1,39 @@
-"""Experience memory — selective storage for human review. Not automatic ground truth."""
+"""Experience Memory — selective storage. Predictions are NOT ground truth."""
 from __future__ import annotations
 import hashlib, json, time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import cv2
 import numpy as np
 
 @dataclass
 class ExperienceSample:
+    experience_id: str
     sample_id: str
     timestamp: float
+    source_type: str
+    source_identifier: str
     camera_source: str
+    frame_id: Optional[int]
     image_path: str
+    image_hash: str
+    model_name: str
+    model_version: str
+    model_backend: str
     detections: List[dict]
+    model_prediction: List[dict]
+    human_annotation: Optional[List[dict]]
     free_space_ratio: float
     risk_score: float
     risk_level: str
     decision: str
     uncertainty_overall: Optional[float]
-    model_backend: str
+    capture_reason: str
     review_status: str = "pending"
     notes: List[str] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self):
         return asdict(self)
 
 class ExperienceMemory:
@@ -32,67 +42,95 @@ class ExperienceMemory:
         self.root.mkdir(parents=True, exist_ok=True)
         (self.root / "images").mkdir(exist_ok=True)
         self.index_path = self.root / "index.jsonl"
+        self._seq_path = self.root / "sequence.txt"
 
-    def _hash_image(self, image: np.ndarray) -> str:
-        small = cv2.resize(image, (64, 64))
-        return hashlib.sha1(small.tobytes()).hexdigest()[:16]
+    def _next_id(self):
+        n = 1
+        if self._seq_path.exists():
+            try: n = int(self._seq_path.read_text().strip()) + 1
+            except ValueError: n = 1
+        self._seq_path.write_text(str(n))
+        return f"EXP-MEM-{n:06d}"
 
-    def store(self, image, camera_source, detections, free_space_ratio, risk_score, risk_level,
-              decision, uncertainty_overall=None, model_backend="classical_cv", min_uncertainty=0.0):
-        if image is None or image.size == 0:
+    def _hash_image(self, image):
+        return hashlib.sha1(cv2.resize(image, (64, 64)).tobytes()).hexdigest()[:16]
+
+    def _hash_seen(self, h):
+        if not self.index_path.exists(): return False
+        return any(h in line for line in self.index_path.read_text(encoding="utf-8").splitlines()[-300:])
+
+    def store(self, image, camera_source="unknown", detections=None, free_space_ratio=0.0,
+              risk_score=0.0, risk_level="UNKNOWN", decision="UNKNOWN",
+              uncertainty_overall=None, model_backend="classical_cv",
+              model_name="classical-cv-baseline", model_version="baseline",
+              source_type="UNKNOWN", source_identifier="", frame_id=None,
+              capture_reason="MANUAL", min_uncertainty=0.0, skip_duplicate_hash=True):
+        if image is None or image.size == 0: return None
+        if uncertainty_overall is not None and min_uncertainty > 0 and uncertainty_overall < min_uncertainty:
             return None
-        if uncertainty_overall is not None and uncertainty_overall < min_uncertainty:
-            return None
+        detections = detections or []
         h = self._hash_image(image)
-        if self.index_path.exists():
-            for line in self.index_path.read_text(encoding="utf-8").splitlines()[-200:]:
-                if h in line:
-                    return None
-        ts = time.time()
-        sample_id = f"{int(ts)}_{h}"
-        img_path = self.root / "images" / f"{sample_id}.jpg"
+        if skip_duplicate_hash and self._hash_seen(h): return None
+        exp_id = self._next_id()
+        img_path = self.root / "images" / f"{exp_id}.jpg"
         cv2.imwrite(str(img_path), image)
         sample = ExperienceSample(
-            sample_id=sample_id, timestamp=ts, camera_source=camera_source,
-            image_path=str(img_path), detections=detections,
-            free_space_ratio=free_space_ratio, risk_score=risk_score,
-            risk_level=risk_level, decision=decision,
-            uncertainty_overall=uncertainty_overall, model_backend=model_backend,
-            notes=["Stored for human review — not automatic ground truth."],
+            experience_id=exp_id, sample_id=exp_id, timestamp=time.time(),
+            source_type=source_type or "UNKNOWN", source_identifier=source_identifier or camera_source,
+            camera_source=camera_source, frame_id=frame_id, image_path=str(img_path), image_hash=h,
+            model_name=model_name, model_version=model_version, model_backend=model_backend,
+            detections=list(detections), model_prediction=list(detections), human_annotation=None,
+            free_space_ratio=float(free_space_ratio), risk_score=float(risk_score),
+            risk_level=str(risk_level), decision=str(decision),
+            uncertainty_overall=uncertainty_overall, capture_reason=capture_reason, review_status="pending",
         )
         with self.index_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(sample.to_dict()) + "\n")
         return sample
 
-    def list_samples(self, limit=50):
-        if not self.index_path.exists():
-            return []
-        out = []
-        for line in self.index_path.read_text(encoding="utf-8").splitlines()[-limit:]:
-            try:
-                out.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-        return list(reversed(out))
+    def list_samples(self, limit=100, review_status=None):
+        if not self.index_path.exists(): return []
+        rows = []
+        for line in self.index_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip(): continue
+            try: row = json.loads(line)
+            except json.JSONDecodeError: continue
+            if review_status and row.get("review_status") != review_status: continue
+            rows.append(row)
+        return list(reversed(rows[-limit:]))
 
-    def set_review_status(self, sample_id, status):
-        if status not in ("pending", "accepted", "corrected", "rejected") or not self.index_path.exists():
-            return False
+    def get(self, experience_id):
+        for s in self.list_samples(10000):
+            if s.get("experience_id") == experience_id or s.get("sample_id") == experience_id:
+                return s
+        return None
+
+    def set_review_status(self, experience_id, status, human_annotation=None, notes=None):
+        if status not in ("pending", "accepted", "corrected", "rejected"):
+            raise ValueError(status)
+        if not self.index_path.exists(): return False
         lines = self.index_path.read_text(encoding="utf-8").splitlines()
-        changed, new_lines = False, []
+        out, found = [], False
         for line in lines:
-            try:
-                obj = json.loads(line)
+            if not line.strip(): continue
+            try: row = json.loads(line)
             except json.JSONDecodeError:
-                new_lines.append(line); continue
-            if obj.get("sample_id") == sample_id:
-                obj["review_status"] = status; changed = True
-            new_lines.append(json.dumps(obj))
-        if changed:
-            self.index_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-        return changed
+                out.append(line); continue
+            if row.get("experience_id") == experience_id or row.get("sample_id") == experience_id:
+                row["review_status"] = status
+                if human_annotation is not None: row["human_annotation"] = human_annotation
+                if notes: row.setdefault("notes", []).append(notes)
+                found = True
+            out.append(json.dumps(row))
+        if found:
+            self.index_path.write_text("\n".join(out) + "\n", encoding="utf-8")
+        return found
 
-    def count(self):
-        if not self.index_path.exists():
-            return 0
-        return sum(1 for line in self.index_path.open(encoding="utf-8") if line.strip())
+    def summary(self):
+        samples = self.list_samples(100000)
+        counts = {"pending": 0, "accepted": 0, "corrected": 0, "rejected": 0}
+        for s in samples:
+            st = s.get("review_status", "pending")
+            counts[st] = counts.get(st, 0) + 1
+        return {"total": len(samples), **counts,
+                "training_ready": counts["accepted"] + counts["corrected"]}
