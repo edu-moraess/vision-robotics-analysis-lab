@@ -12,7 +12,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.core.pipeline import AnalysisPipeline
-from src.camera import WebcamSource, IPCameraSource
+from src.camera import WebcamSource, IPCameraSource, SmartphoneCameraSource, VideoFileSource
+from src.learning import ExperienceMemory, FrameCache
 
 st.set_page_config(page_title="Vision Robotics Lab", page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""<style>
@@ -37,8 +38,10 @@ def load_image(uploaded_file):
     return img
 
 def bgr_to_rgb(img):
-    if img is None: return img
-    if img.ndim == 2: return cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+    if img is None:
+        return img
+    if img.ndim == 2:
+        return cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
     return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 @st.cache_resource
@@ -53,19 +56,23 @@ with st.sidebar:
     uploaded = None
     cam_index = 0
     ip_url = ""
-    start_cam = stop_cam = False
+    start_cam = stop_cam = reconnect_cam = False
     cam_src = "Webcam"
     if mode == "Image Analysis":
         uploaded = st.file_uploader("Upload image", type=["jpg", "jpeg", "png", "webp", "bmp"], accept_multiple_files=False)
     else:
-        cam_src = st.selectbox("Camera source", ["Webcam", "IP / RTSP URL"])
+        cam_src = st.selectbox("Camera source", ["Webcam", "Smartphone (network stream)", "IP / RTSP URL", "Video File"])
         if cam_src == "Webcam":
             cam_index = st.number_input("Device index", 0, 10, 0, 1)
         else:
-            ip_url = st.text_input("Stream URL", placeholder="rtsp://... or http://...")
+            ph = "http://192.168.0.10:8080/video" if "Smartphone" in cam_src else ("/path/to/video.mp4" if "Video" in cam_src else "rtsp://...")
+            ip_url = st.text_input("Stream URL / path", placeholder=ph)
+            if "Smartphone" in cam_src:
+                st.caption("Apps: IP Webcam / DroidCam. Phone = sensor; PC runs inference.")
         c1, c2 = st.columns(2)
         start_cam = c1.button("START", use_container_width=True)
         stop_cam = c2.button("STOP", use_container_width=True)
+        reconnect_cam = st.button("RECONNECT", use_container_width=True)
         st.caption("Live camera needs local hardware. Cloud: usually unavailable.")
     st.markdown("---")
     conf_thresh = st.slider("Confidence threshold", 0.10, 0.90, 0.35, 0.05)
@@ -84,6 +91,10 @@ for key, default in [("result", None), ("original_bgr", None), ("last_file_id", 
                      ("camera", None), ("live_running", False), ("fps", 0.0), ("frame_count", 0)]:
     if key not in st.session_state:
         st.session_state[key] = default
+if "experience_memory" not in st.session_state:
+    st.session_state.experience_memory = ExperienceMemory()
+if "frame_cache" not in st.session_state:
+    st.session_state.frame_cache = FrameCache(max_frames=30)
 
 if mode == "Image Analysis" and uploaded is not None:
     file_id = f"{uploaded.name}-{uploaded.size}"
@@ -102,16 +113,36 @@ if mode == "Image Analysis" and uploaded is not None:
 
 if mode == "Live Camera":
     if stop_cam and st.session_state.camera is not None:
-        try: st.session_state.camera.stop()
-        except Exception: pass
+        try:
+            st.session_state.camera.stop()
+        except Exception:
+            pass
         st.session_state.camera = None
         st.session_state.live_running = False
+    if reconnect_cam and st.session_state.camera is not None:
+        try:
+            if hasattr(st.session_state.camera, "reconnect"):
+                st.session_state.camera.reconnect()
+            else:
+                st.session_state.camera.stop()
+                st.session_state.camera.start()
+            st.session_state.live_running = True
+        except Exception as e:
+            st.error(f"Reconnect failed: {e}")
     if start_cam:
         try:
             if st.session_state.camera is not None:
                 st.session_state.camera.stop()
             if cam_src == "Webcam":
                 cam = WebcamSource(device_index=int(cam_index))
+            elif "Smartphone" in cam_src:
+                if not ip_url.strip():
+                    raise ValueError("Provide smartphone stream URL.")
+                cam = SmartphoneCameraSource(url=ip_url.strip())
+            elif "Video" in cam_src:
+                if not ip_url.strip():
+                    raise ValueError("Provide a video file path.")
+                cam = VideoFileSource(path=ip_url.strip())
             else:
                 if not ip_url.strip():
                     raise ValueError("Provide a stream URL.")
@@ -132,13 +163,15 @@ if mode == "Live Camera":
             st.session_state.live_running = False
         else:
             t0 = time.perf_counter()
-            ok, frame = cam.read()
-            if ok and frame is not None:
+            packet = cam.read()
+            if packet is not None and packet.image is not None:
+                frame = packet.image
                 pipe = st.session_state.get("_live_pipe") or get_pipeline(min_area, conf_thresh, cell_size, enable_tracking)
                 try:
                     result = pipe.run(frame, run_planner=run_planner)
                     st.session_state.result = result
                     st.session_state.original_bgr = frame
+                    st.session_state.frame_cache.push(frame, source=packet.source, frame_id=packet.frame_id)
                     dt = time.perf_counter() - t0
                     st.session_state.fps = (1.0 / dt) if dt > 0 else 0.0
                     st.session_state.frame_count += 1
@@ -180,17 +213,29 @@ with tabs[0]:
             ks[3].metric("ACTION", m["decision"])
             ks[4].metric("LATENCY", f"{m['processing_time_ms']:.0f} ms")
             ks[5].metric("FPS" if cam_on else "TRACKS", f"{st.session_state.fps:.1f}" if cam_on else m.get("track_count", 0))
+            if st.button("STORE TO EXPERIENCE MEMORY"):
+                sample = st.session_state.experience_memory.store(
+                    image=result.annotated_image, camera_source="streamlit",
+                    detections=[d.to_dict() for d in result.detections],
+                    free_space_ratio=result.scene.estimated_free_space_ratio,
+                    risk_score=result.risk.score, risk_level=result.risk.level,
+                    decision=result.decision.action,
+                    uncertainty_overall=result.uncertainty.overall if result.uncertainty else None,
+                )
+                if sample:
+                    st.success(f"Stored {sample.sample_id} (pending review)")
+                else:
+                    st.info("Skipped (duplicate or filtered).")
+            st.caption(f"Experience memory samples: {st.session_state.experience_memory.count()}")
 
 with tabs[1]:
     st.markdown("### LIVE VISION / FRAME VIEW")
     if mode == "Live Camera":
-        st.caption(f"Running={st.session_state.live_running} · frames={st.session_state.frame_count} · FPS≈{st.session_state.fps:.1f} (wall-clock)")
+        st.caption(f"Running={st.session_state.live_running} · frames={st.session_state.frame_count} · FPS≈{st.session_state.fps:.1f}")
     if result is None:
         st.info("No frame analyzed.")
     else:
         st.image(bgr_to_rgb(result.path_overlay if show_path else result.annotated_image), use_container_width=True)
-        if result.tracks:
-            st.dataframe([t.to_dict() for t in result.tracks], use_container_width=True)
 
 with tabs[2]:
     st.markdown("### PERCEPTION PIPELINE")
@@ -209,6 +254,9 @@ with tabs[2]:
         a.image(bgr_to_rgb(result.annotated_image), caption="DETECTIONS", use_container_width=True)
         if result.detections:
             b.dataframe([d.to_dict() for d in result.detections], use_container_width=True)
+        if getattr(result, "geometries", None):
+            st.markdown("**PIXEL GEOMETRY** (not metric)")
+            st.dataframe([g.to_dict() for g in result.geometries], use_container_width=True)
 
 with tabs[3]:
     st.markdown("### SCENE MODEL")
@@ -222,9 +270,6 @@ with tabs[3]:
         d.metric("Density", f"{s.obstacle_density*100:.1f}%")
         if show_free and s.free_space_mask is not None:
             st.image(bgr_to_rgb(result.free_space_overlay), use_container_width=True)
-        if result.occupancy is not None:
-            st.caption(result.occupancy.label)
-            st.write(f"Grid {result.occupancy.shape} · free_ratio={result.occupancy.free_ratio():.3f}")
         st.json(s.to_dict())
 
 with tabs[4]:
@@ -250,12 +295,8 @@ with tabs[5]:
         c1, c2, c3 = st.columns(3)
         c1.metric("ACTION", dec.action); c2.metric("CONFIDENCE", f"{dec.confidence:.2f}"); c3.metric("RISK", risk.level)
         st.markdown(f"**REASON**\n\n{dec.reason}")
-        st.metric("Risk score", f"{risk.score:.3f}")
-        for name, val in risk.contributors.items():
-            st.progress(min(1.0, val / 0.40), text=f"{name}: +{val:.3f}")
         if result.uncertainty is not None:
-            st.markdown("**UNCERTAINTY (heuristic, not calibrated probability)**")
-            st.metric("Overall", f"{result.uncertainty.overall:.3f}")
+            st.metric("Uncertainty (heuristic)", f"{result.uncertainty.overall:.3f}")
             st.json(result.uncertainty.to_dict())
 
 with tabs[6]:
@@ -265,23 +306,19 @@ with tabs[6]:
     else:
         st.json(result.metrics())
         if result.latency is not None:
-            st.markdown("**Latency breakdown (ms)**")
             st.json(result.latency.to_dict())
 
 with tabs[7]:
-    st.markdown("### SYSTEM")
     import platform
     st.markdown(f"""
 | Component | Status |
 |-----------|--------|
-| Python | {platform.python_version()} |
-| OpenCV | {cv2.__version__} |
-| Streamlit | {st.__version__} |
-| Detector | Classical CV — IMPLEMENTED |
-| Tracker (IoU) | IMPLEMENTED (live only) |
-| Occupancy / Cost map | IMPLEMENTED (image-space) |
-| A* / Dijkstra | IMPLEMENTED (image-space) |
-| Risk / Decision / Uncertainty | IMPLEMENTED |
-| Depth / YOLO / ROS 2 | NOT AVAILABLE / FUTURE |
+| Python / OpenCV / Streamlit | {platform.python_version()} / {cv2.__version__} / {st.__version__} |
+| Classical Detector | IMPLEMENTED |
+| IoU Tracker | IMPLEMENTED (live) |
+| Smartphone / Video / Webcam / IP | IMPLEMENTED |
+| Geometry (pixel) | IMPLEMENTED |
+| Experience Memory | IMPLEMENTED (review required) |
+| YOLO / Depth / Training / ROS 2 | NOT AVAILABLE / FUTURE |
 """)
     st.caption("https://github.com/edu-moraess/vision-robotics-analysis-lab")
